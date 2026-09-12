@@ -1,7 +1,9 @@
 package automation
 
 import (
+	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -58,9 +60,7 @@ func sampleTree() []accessibility.AccessibilityNode {
 func startServer(t *testing.T) (*Server, *Client, *recorder) {
 	t.Helper()
 	rec := &recorder{}
-	// A short path: a Unix socket address is limited to about 100 bytes, and
-	// t.TempDir() under a long test name can exceed it.
-	socket := filepath.Join(t.TempDir(), "a.sock")
+	socket := shortSocketPath(t)
 
 	server, err := Listen(socket)
 	if err != nil {
@@ -316,5 +316,35 @@ func TestRoleSelectorToleratesSpelling(t *testing.T) {
 		if len(nodes) != 2 {
 			t.Errorf("Find(%q) matched %d nodes, want 2", spelling, len(nodes))
 		}
+	}
+}
+
+// shortSocketPath returns a socket path well under the sockaddr_un limit.
+// t.TempDir() embeds the test name and a long random suffix, which on macOS
+// pushes the path past 104 bytes and makes bind fail with a bare EINVAL.
+func shortSocketPath(t *testing.T) string {
+	t.Helper()
+	dir, err := os.MkdirTemp("", "lmn")
+	if err != nil {
+		t.Fatalf("temp dir: %v", err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(dir) })
+	return filepath.Join(dir, "a.sock")
+}
+
+// The macOS CI path that first broke this: 122 bytes, over the sockaddr_un
+// limit. Before the guard, bind failed with a bare EINVAL that said nothing
+// about length.
+func TestOverlongSocketPathIsRejectedClearly(t *testing.T) {
+	long := "/var/folders/36/tjdph2t965j8snz9_vkdnw0r0000gn/T/TestAutomationDrivesARunningApplication2442847269/001/a.sock"
+	if len(long) <= maxSocketPathLen {
+		t.Fatalf("fixture is %d bytes, expected it to exceed %d", len(long), maxSocketPathLen)
+	}
+	_, err := Listen(long)
+	if err == nil {
+		t.Fatal("an overlong socket path was accepted")
+	}
+	if !strings.Contains(err.Error(), "over the") {
+		t.Errorf("error does not explain the length limit: %v", err)
 	}
 }

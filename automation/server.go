@@ -15,6 +15,12 @@ import (
 	"github.com/thebanri/limoni/core/driver"
 )
 
+// maxSocketPathLen is the shortest sockaddr_un limit across the platforms
+// Limoni supports (104 on macOS and the BSDs, 108 on Linux), minus room for the
+// terminating NUL. Checked uniformly so a path that works on Linux does not
+// surprise a macOS user later.
+const maxSocketPathLen = 103
+
 // Snapshot is what one frame published to the server: the semantic tree plus
 // the rendered grid and focus, captured after a draw.
 type Snapshot struct {
@@ -50,6 +56,15 @@ type Server struct {
 func Listen(socketPath string) (*Server, error) {
 	if socketPath == "" {
 		return nil, fmt.Errorf("automation: empty socket path")
+	}
+	// sockaddr_un caps the path at 104 bytes on macOS and the BSDs, 108 on
+	// Linux. Over the limit, bind fails with a bare EINVAL that says nothing
+	// about length, so check it here and say what is actually wrong. A deep
+	// project directory or a Go test temp dir will hit this.
+	if len(socketPath) > maxSocketPathLen {
+		return nil, fmt.Errorf(
+			"automation: socket path is %d bytes, over the %d-byte limit the OS allows for a Unix socket: %s",
+			len(socketPath), maxSocketPathLen, socketPath)
 	}
 	if dir := filepath.Dir(socketPath); dir != "" {
 		if err := os.MkdirAll(dir, 0o700); err != nil {

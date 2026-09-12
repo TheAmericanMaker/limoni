@@ -1,6 +1,7 @@
 package limoni
 
 import (
+	"os"
 	"path/filepath"
 	"sync"
 	"sync/atomic"
@@ -21,7 +22,7 @@ import (
 // through it: the wiring between the loop, the frame and the server is where
 // this would break.
 func TestAutomationDrivesARunningApplication(t *testing.T) {
-	socket := filepath.Join(t.TempDir(), "a.sock")
+	socket := shortSocketPath(t)
 
 	var mu sync.Mutex
 	var stop atomic.Bool
@@ -170,6 +171,19 @@ func (b submitButton) Draw(ctx cell.Context, buf *buffer.Buffer) {
 
 func (b submitButton) SizeHint(maxArea cell.Rect) (uint16, uint16) {
 	return 10, 1
+}
+
+// shortSocketPath keeps the address under the sockaddr_un limit. t.TempDir()
+// embeds the test name and a long random suffix, which on macOS pushes the
+// path past 104 bytes and makes bind fail with a bare EINVAL.
+func shortSocketPath(t *testing.T) string {
+	t.Helper()
+	dir, err := os.MkdirTemp("", "lmn")
+	if err != nil {
+		t.Fatalf("temp dir: %v", err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(dir) })
+	return filepath.Join(dir, "a.sock")
 }
 
 // dialWithRetry waits for the loop's goroutine to have created the socket.
