@@ -150,6 +150,7 @@ go run ./examples/charts
 * 🕶️ **Dahili 3D & Vektör Grafik Motoru**: `.obj`, `.stl`, `.ply` 3D modelleri Gouraud/Lambertian gölgelendirme ile doğrudan terminalde işleme.
 * ♿ **Dahili Erişilebilirlik (A11y)**: Ekran okuyucular için semantik gezinme ağacı ve satır satır denetim modu.
 * 🤖 **Semantik Otomasyon**: Çalışan bir uygulamayı ekran koordinatı yerine seçiciyle sürün — aşağıya bakın.
+* 🔲 **Otomatik Kenarlık Birleştirme**: Komşu `Block`'lar `MergeBorders` ile tek bir kenarı paylaşır ve `┬ ┼ ├ ┤ ┴` ile birleşir; hücrede zaten duran box-drawing parçalarının birleşimi alınarak — string birleştiren bir render motorunun çoktan üzerine yazdığı bir bilgi.
 
 ---
 

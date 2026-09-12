@@ -180,6 +180,7 @@ go run ./examples/charts
 * 🕶️ **Native 3D & Vector Graphics**: Render 3D `.obj`, `.stl`, `.ply` meshes directly in terminal cells with camera projection, rotation, and lighting!
 * ♿ **Built-in Accessibility**: Accessible navigation tree, line-by-line inspection mode, and semantic annotations for screen-readers.
 * 🤖 **Semantic Automation**: Drive a running application by selector instead of by screen coordinate — see below.
+* 🔲 **Automatic Border Merging**: Adjacent `Block`s share one edge and meet in `┬ ┼ ├ ┤ ┴` via `MergeBorders`, by unioning the box-drawing segments already in the cell — something a string-concatenating renderer has already overwritten.
 
 ---
 

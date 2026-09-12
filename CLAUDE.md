@@ -196,6 +196,14 @@ Bubble Tea v2 benchmark runner with a documented baseline.
 7. **Canvas markers.** Ratatui 0.30 added quadrant (2×2) and sextant (2×3) markers
    alongside Braille (2×4). Sextants help where Braille fonts are missing.
 
-8. **Automatic border merging** between adjacent `Block`s. Ratatui 0.30 does this;
-   a cell grid can do it far more easily than a string-based renderer, so it is a
-   concrete demonstration of the architecture's advantage.
+8. **Inline (non-altscreen) render mode and diff bandwidth.** Ratatui has
+   `Viewport::Inline` and Ultraviolet emits `ECH`/`REP`/`ICH`/`DCH` plus
+   scroll-region optimisation; Limoni has neither. Inline mode is what `gum` and
+   CI progress renderers are built on, and emitted bytes govern responsiveness
+   over SSH. These are the two places a Ratatui user would still find Limoni
+   short.
+
+   Border merging is done: `Block.MergeBorders` unions the box-drawing segments
+   already in the cell, so adjacent blocks meet in `┬ ┼ ├ ┤ ┴`. It costs a read
+   per border cell (~4%) and stays at zero allocations. Only the light set is
+   merged — heavy and double lines have no honest junction with light ones.
