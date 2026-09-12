@@ -111,7 +111,7 @@ While **Lip Gloss v1** popularized styling in Go, its string-concatenation archi
 | **Mouse Hit-Testing** | **Automatic spatial bounds & z-index routing** | None (requires manual coordinate mapping) |
 | **Screen Clipping** | **Sub-cell rectangular spatial clipping** | String chopping (causes broken ANSI codes) |
 | **Z-Index & Overlays** | **Hardware-like layer stack & modal trapping** | Line-by-line string splicing (`PlaceOverlay`) |
-| **Rendering Pipeline** | **Double-buffered ANSI diffing (`~7.1 µs`)** | Full terminal string dump (causes screen flicker) |
+| **Rendering Pipeline** | **Double-buffered ANSI diffing (`~14 µs` sparse, `~50 µs` full-screen)** | Full terminal string dump (causes screen flicker) |
 | **Migration Bridge** | **`compat/bubbletea` fluent style builder** | Native Charm ecosystem standard |
 
 #### Why Zero-Allocation Architecture Matters:
@@ -172,13 +172,65 @@ go run ./examples/charts
 
 ## ✨ Key Features
 
-* 🚀 **Ultra-Fast ANSI Diffing**: Computes dirty cell regions and emits minimal ANSI escape sequences in ~7.1 µs on full-screen changes (~140,000 FPS throughput) with zero heap allocations, short-circuiting in ~2 ns when clean.
+* 🚀 **Ultra-Fast ANSI Diffing**: Computes dirty cell regions and emits minimal ANSI escape sequences in ~50 µs on a full-screen 120×40 change (~19,800 FPS) with zero heap allocations, short-circuiting in ~2 ns when clean. See [Benchmarks](#-benchmarks) for the measurement conditions.
 * 📦 **Contiguous 1D Buffer**: Flat memory layout eliminates pointer chasing and maximizes CPU L1/L2 cache locality.
 * 🎨 **TrueColor & Fallback Engine**: Full 24-bit RGB TrueColor support with automatic downsampling fallbacks for 256-color and 16-color terminals.
 * 📐 **Responsive Flexbox Layouts**: Declarative layout engine supporting proportional splits, minimum/maximum size constraints, and nested alignments.
 * 🎬 **Animation & Easing Engine**: Built-in interpolation for float, color, and transitions (Linear, Quad, Cubic, Elastic, Bounce).
 * 🕶️ **Native 3D & Vector Graphics**: Render 3D `.obj`, `.stl`, `.ply` meshes directly in terminal cells with camera projection, rotation, and lighting!
 * ♿ **Built-in Accessibility**: Accessible navigation tree, line-by-line inspection mode, and semantic annotations for screen-readers.
+* 🤖 **Semantic Automation**: Drive a running application by selector instead of by screen coordinate — see below.
+
+---
+
+## 🤖 Semantic Automation
+
+Every tool that automates a terminal application today — [termwright](https://github.com/fcoury/termwright), [mcp-tui-test](https://github.com/GeorgePearse/mcp-tui-test) — wraps the process in a pseudo-terminal and parses the rendered character grid. They have no choice: the application underneath has no semantics to offer. So a test asserts that some text sits at some coordinate, and breaks the moment the layout shifts by one column.
+
+Limoni already builds a semantic tree every frame, for screen readers. `WithAutomation` serves that same tree on a Unix socket, which turns
+
+```
+assert text "Submit" at 42,7  →  click 42,7
+```
+
+into
+
+```go
+client.Click(automation.Selector{Role: "button", Label: "Submit"})
+```
+
+The selector survives relayout, resizing and restyling, because it never mentions where anything is drawn.
+
+```go
+// The application opts in. Off by default.
+limoni.Run(draw, limoni.WithAutomation("/run/user/1000/myapp.sock"))
+```
+
+```go
+// A test, or an agent, drives it.
+client, _ := automation.Dial("/run/user/1000/myapp.sock")
+defer client.Close()
+
+list, _ := client.WaitFor(automation.Selector{Role: "list"}, 3*time.Second)
+// list.Value == "beta", list.Position == 2, list.SetSize == 3
+
+client.Key("down")
+client.Type("hello")
+client.Click(automation.Selector{Role: "button", Label: "Submit"})
+
+screen, _ := client.Screen() // the raw grid, for assertions the tree cannot make
+```
+
+The protocol is newline-delimited JSON, so `socat` is a usable client when debugging. An ambiguous selector is an **error**, not a coin toss — a test that silently takes the first of two matching buttons passes for the wrong reason as soon as the second one appears; pass `Nth` to say which you meant.
+
+> [!WARNING]
+> **This opens a control channel into a running process.** Understand the trade before enabling it.
+>
+> - **It synthesises input.** A client can press keys and click widgets in your application. Anything a user could do at the keyboard, a socket client can do.
+> - **It exposes your UI's contents.** The semantic tree carries labels and values — which may include whatever your application is displaying, secrets included.
+> - **Unix socket only, 0600, no TCP option.** This is deliberate and not configurable: a port would offer application control to anything that can reach the host. File permissions are the whole security model, so put the socket somewhere only the user can write, such as `$XDG_RUNTIME_DIR`.
+> - **Off unless you ask for it.** There is no environment-variable switch that could turn it on behind your back.
+> - **Treat it as a debug console.** It belongs in development and CI. If you ship it enabled, you are shipping remote control of your UI to every local process running as that user.
 
 ---
 
@@ -525,7 +577,7 @@ To experience Limoni's 3D software rasterization, charts, and Braille vector gra
 
 ### 3. How does Limoni maintain 60+ FPS during rapid full-screen animations?
 Limoni features a threshold-based **Adaptive Flush Engine**:
-* **Sparse Diffing (`dirtyRatio < 0.45`):** For typing, metric tickers, and cursor blinks, computes minimal dirty cell regions and emits precise cursor jumps (`CUP`), completing in **`~7.1 µs`** with zero heap allocations.
+* **Sparse Diffing (`dirtyRatio < 0.45`):** For typing, metric tickers, and cursor blinks, computes minimal dirty cell regions and emits precise cursor jumps (`CUP`), completing in **`~14.2 µs`** with zero heap allocations.
 * **Full-Stream Redraw (`dirtyRatio >= 0.45`):** When rotating 3D meshes, scrolling large tables, or fading tabs, switching to jump diffing would produce thousands of disjoint escape sequences. Limoni automatically switches to synchronized home (`\x1b[H`) full-stream streaming wrapped in DEC synchronized update mode (`\x1b[?2026h`), completely eliminating visual tearing and flicker while preserving **`0 B/op`** zero-allocation efficiency.
 
 ---

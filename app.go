@@ -1,6 +1,10 @@
 package limoni
 
-import "time"
+import (
+	"time"
+
+	"github.com/thebanri/limoni/automation"
+)
 
 var wakeupChan = make(chan struct{}, 1)
 
@@ -18,8 +22,23 @@ func Wakeup() {
 type AppOption func(*appConfig)
 
 type appConfig struct {
-	catchCtrlC bool
-	fps        int
+	catchCtrlC     bool
+	fps            int
+	automationPath string
+}
+
+// WithAutomation serves the application's semantic tree on a Unix socket, so
+// tests and agents can drive it by selector instead of by screen coordinate.
+// See the automation package for the protocol and its security caveats.
+//
+// It is off unless you call this. The socket accepts commands that synthesise
+// input into the running application, so treat enabling it the way you would
+// treat enabling a debug console: a development and CI facility, not something
+// to ship on by default.
+func WithAutomation(socketPath string) AppOption {
+	return func(c *appConfig) {
+		c.automationPath = socketPath
+	}
 }
 
 // WithFPS configures a continuous animation frame rate (e.g. 60, 120, 240 FPS).
@@ -65,12 +84,61 @@ func Run(appFn func(f *Frame, ev *Event) bool, opts ...AppOption) error {
 		return err
 	}
 	defer term.Close()
+	return runLoop(term, appFn, cfg)
+}
+
+// runLoop is Run's body with the terminal supplied, so the loop — including
+// the automation wiring — can be exercised against a headless terminal instead
+// of only against a tty.
+func runLoop(term *Terminal, appFn func(f *Frame, ev *Event) bool, cfg appConfig) error {
+	var err error
 	term.StartEventLoop()
+
+	// Synthetic events are delivered on their own channel rather than pushed
+	// into the driver's, so automation can never race the input parser.
+	var (
+		autoServer *automation.Server
+		injected   chan Event
+	)
+	if cfg.automationPath != "" {
+		autoServer, err = automation.Listen(cfg.automationPath)
+		if err != nil {
+			return err
+		}
+		defer autoServer.Close()
+		injected = make(chan Event, 64)
+	}
+	publish := func(f *Frame) {
+		if autoServer == nil {
+			return
+		}
+		focused := ""
+		if f.FocusManager != nil {
+			focused = f.FocusManager.Focused()
+		}
+		autoServer.Publish(automation.Snapshot{
+			Tree:    f.AccessibilityTree(),
+			Screen:  f.Buffer.Snapshot(),
+			Focused: focused,
+			Width:   f.Buffer.Area.Width,
+			Height:  f.Buffer.Area.Height,
+			Injector: func(ev Event) {
+				select {
+				case injected <- ev:
+				default:
+					// Dropped rather than blocking the automation handler: a
+					// client that outruns the render loop gets backpressure as
+					// a lost event, not a deadlocked application.
+				}
+			},
+		})
+	}
 
 	running := true
 	// Initial render
 	err = term.Draw(func(f *Frame) {
 		running = appFn(f, nil)
+		publish(f)
 	})
 	if err != nil || !running {
 		return err
@@ -81,6 +149,18 @@ func Run(appFn func(f *Frame, ev *Event) bool, opts ...AppOption) error {
 		ticker := time.NewTicker(time.Second / time.Duration(cfg.fps))
 		defer ticker.Stop()
 		tickerChan = ticker.C
+	}
+
+	// handle draws one frame for an event, or for nil on a timer or wakeup.
+	handle := func(ev *Event) error {
+		if ev != nil && ev.Type == EventMouse {
+			// Route mouse event through terminal hit-test router
+			term.RouteMouseEvent(ev.Mouse)
+		}
+		return term.Draw(func(f *Frame) {
+			running = appFn(f, ev)
+			publish(f)
+		})
 	}
 
 	events := term.Events()
@@ -94,32 +174,27 @@ func Run(appFn func(f *Frame, ev *Event) bool, opts ...AppOption) error {
 			if !cfg.catchCtrlC && ev.Type == EventKey && ev.Key.Ctrl && (ev.Key.Ch == 'c' || ev.Key.Ch == 'C') {
 				return nil
 			}
-			// Route mouse event through terminal hit-test router
-			if ev.Type == EventMouse {
-				term.RouteMouseEvent(ev.Mouse)
+			if err := handle(&ev); err != nil {
+				return err
 			}
-			err = term.Draw(func(f *Frame) {
-				running = appFn(f, &ev)
-			})
-			if err != nil {
+
+		case ev := <-injected:
+			// Synthetic input from the automation socket. Ctrl+C is not given
+			// the quit shortcut here: a remote client should not be able to
+			// terminate the application by accident.
+			if err := handle(&ev); err != nil {
 				return err
 			}
 
 		case <-wakeupChan:
 			// Arka plandaki goroutine'den Wakeup() çağrıldığında tetiklenir
-			err = term.Draw(func(f *Frame) {
-				running = appFn(f, nil)
-			})
-			if err != nil {
+			if err := handle(nil); err != nil {
 				return err
 			}
 
 		case <-tickerChan:
 			// WithFPS ayarlandığında hedef kare hızında tetiklenir
-			err = term.Draw(func(f *Frame) {
-				running = appFn(f, nil)
-			})
-			if err != nil {
+			if err := handle(nil); err != nil {
 				return err
 			}
 		}

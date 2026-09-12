@@ -45,7 +45,7 @@
 
 **Limoni**, Go dili için sıfırdan tasarlanmış kurumsal düzeyde, yüksek performanslı bir Terminal Kullanıcı Arayüzü (TUI) motorudur. Veri yoğun izleme panelleri, DevOps araçları ve modern CLI uygulamaları için Go'nun geliştirici ergonomisini Rust benzeri ham render hızıyla buluşturur.
 
-**1D düz hücre matrisi**, **sıfır bellek tahsisatlı sıcak yollar (zero-alloc hot-paths)** ve **yüksek performanslı diferansiyel ANSI motoru (~7.1 µs tam ekran diff, 0 B/op)** sayesinde Go Garbage Collector'ını tetiklemeden yüksek FPS'te pürüzsüz çizim sağlar.
+**1D düz hücre matrisi**, **sıfır bellek tahsisatlı sıcak yollar (zero-alloc hot-paths)** ve **yüksek performanslı diferansiyel ANSI motoru (~50 µs tam ekran diff, 0 B/op)** sayesinde Go Garbage Collector'ını tetiklemeden yüksek FPS'te pürüzsüz çizim sağlar.
 
 ---
 
@@ -55,7 +55,7 @@
 | :--- | :--- | :--- | :--- | :--- |
 | **Dil ve Araçlar** | **Go (Yerel)** | Go (Yerel) | Go (Yerel) | Rust (Yerel) |
 | **Render Mimarisi** | **1D Düz Matris + Adaptif ANSI Diff** | String birleştirme / TEA | Hücre tamponu + ncurses tarzı diff | Çift Tamponlu Immediate Mode |
-| **Kritik Yol Tahsisatı**| **`0 B/op` (Sıfır Alloc)** | Yüksek heap tahsisatı | Azaltılmış; sıfır-alloc bir tasarım hedefi değil — *henüz burada ölçülmedi* | Stack / RAII |
+| **Kritik Yol Tahsisatı**| **`0 B/op` (Sıfır Alloc)** | Yüksek heap tahsisatı | Azaltılmış; sıfır-alloc bir tasarım hedefi değil — Ultraviolet her glif için bir `Cell` tahsis ediyor | Stack / RAII |
 | **Düzen Paradigması** | **Bildirimsel Flexbox & Yığın Çözücü** | String dilimleme (`JoinHorizontal/Vertical`) | Cassowary kısıt çözücü | Kısıt çözücü (Constraint solver) |
 | **Fare Etkileşimi** | **Hücresel Koordinat & Z-Index Yönlendirme** | Yok (manuel koordinat hesabı) | SGR fare olayları; dahili hit-testing yok | Manuel koordinat |
 | **Çift Tampon & Diff** | **Mikrosaniye altı diff + Adaptif tam akış** | Yok (tüm string stdout'a dökülür) | Hücre diff + `ECH`/`REP`/`ICH`/`DCH` + kaydırma optimizasyonu | Çift tamponlu diff |
@@ -86,7 +86,7 @@
 | **Fare Hit-Testing** | **Otomatik uzamsal sınırlar & z-index yönlendirme** | Yok (manuel koordinat ve karakter hesabı gerekir) |
 | **Ekran Kırpma (Clipping)** | **Hücre seviyesinde dikdörtgensel uzamsal kırpma** | String kesme (bozuk ANSI kaçış dizilerine yol açar) |
 | **Z-Index & Katmanlar** | **Donanım benzeri katman yığını & modal izole** | Satır satır string yamama (`PlaceOverlay`) |
-| **Render Hattı** | **Çift tamponlu ANSI diffing (`~7.1 µs`)** | Tüm terminale string dökme (ekranda titreme yapar) |
+| **Render Hattı** | **Çift tamponlu ANSI diffing (`~14 µs` seyrek, `~50 µs` tam ekran)** | Tüm terminale string dökme (ekranda titreme yapar) |
 | **Geçiş Köprüsü** | **`compat/bubbletea` akıcı stil oluşturucu** | Charm ekosistemi yerel standardı |
 
 #### Neden Sıfır Bellek Tahsisatlı Mimari Önemlidir?
@@ -142,13 +142,65 @@ go run ./examples/charts
 
 ## ✨ Temel Özellikler
 
-* 🚀 **Ultra Hızlı ANSI Diffing**: Ekrandaki değişiklikleri tespit edip tam ekran yenilemede dahi ~7.1 µs (~140.000 FPS) sürede sıfır bellek tahsisatıyla minimum ANSI kaçış dizilerini terminale gönderir; ekran değişmediğinde ~2 ns içinde anında döner.
+* 🚀 **Ultra Hızlı ANSI Diffing**: Ekrandaki değişiklikleri tespit edip tam ekran yenilemede ~50 µs (~19.800 FPS) sürede sıfır bellek tahsisatıyla minimum ANSI kaçış dizilerini terminale gönderir; ekran değişmediğinde ~2 ns içinde anında döner.
 * 📦 **1D Düz Tampon (Flat Buffer)**: Bellek parçalanmasını önler ve CPU L1/L2 önbellek erişimini maksimize eder.
 * 🎨 **24-Bit TrueColor & Otomatik Geri Dönüş**: TrueColor desteği olmayan terminallerde otomatik 256 ve 16 renk dönüşümü.
 * 📐 **Esnek Flexbox & Grid Düzeni**: Proportional, Fixed, Min/Max, GridArea ve boyut pazarlığı (negotiation) desteği.
 * 🎬 **60 FPS Animasyon & Fizik Motoru**: Yay (spring) fizikleri, renk enterpolasyonu ve akıcı easing eğrileri.
 * 🕶️ **Dahili 3D & Vektör Grafik Motoru**: `.obj`, `.stl`, `.ply` 3D modelleri Gouraud/Lambertian gölgelendirme ile doğrudan terminalde işleme.
 * ♿ **Dahili Erişilebilirlik (A11y)**: Ekran okuyucular için semantik gezinme ağacı ve satır satır denetim modu.
+* 🤖 **Semantik Otomasyon**: Çalışan bir uygulamayı ekran koordinatı yerine seçiciyle sürün — aşağıya bakın.
+
+---
+
+## 🤖 Semantik Otomasyon
+
+Bugün bir terminal uygulamasını otomatikleştiren her araç — [termwright](https://github.com/fcoury/termwright), [mcp-tui-test](https://github.com/GeorgePearse/mcp-tui-test) — süreci bir sözde terminale sarıp çizilen karakter ızgarasını parse eder. Başka çareleri yoktur: alttaki uygulamanın sunacak bir semantiği yoktur. Dolayısıyla test, bir metnin bir koordinatta olduğunu doğrular ve düzen bir sütun kaydığı anda kırılır.
+
+Limoni zaten ekran okuyucular için her karede bir semantik ağaç kuruyor. `WithAutomation` aynı ağacı bir Unix soketinde sunar; böylece
+
+```
+"Submit" metni 42,7'de mi?  →  42,7'ye tıkla
+```
+
+yerine
+
+```go
+client.Click(automation.Selector{Role: "button", Label: "Submit"})
+```
+
+yazarsınız. Seçici yeniden düzenlemeye, boyutlandırmaya ve stil değişimine dayanır, çünkü hiçbir şeyin nerede çizildiğinden söz etmez.
+
+```go
+// Uygulama açıkça istemek zorunda. Varsayılan kapalı.
+limoni.Run(draw, limoni.WithAutomation("/run/user/1000/myapp.sock"))
+```
+
+```go
+// Test ya da ajan sürer.
+client, _ := automation.Dial("/run/user/1000/myapp.sock")
+defer client.Close()
+
+list, _ := client.WaitFor(automation.Selector{Role: "list"}, 3*time.Second)
+// list.Value == "beta", list.Position == 2, list.SetSize == 3
+
+client.Key("down")
+client.Type("hello")
+client.Click(automation.Selector{Role: "button", Label: "Submit"})
+
+screen, _ := client.Screen() // ağacın ifade edemediği doğrulamalar için ham ızgara
+```
+
+Protokol satır ayrımlı JSON, yani hata ayıklarken `socat` kullanılabilir bir istemcidir. Belirsiz bir seçici **hatadır**, yazı tura değil — iki eşleşen düğmeden sessizce ilkini seçen bir test, ikincisi eklendiği anda yanlış sebeple geçer; hangisini kastettiğinizi `Nth` ile söyleyin.
+
+> [!WARNING]
+> **Bu, çalışan bir sürece kontrol kanalı açar.** Etkinleştirmeden önce takası anlayın.
+>
+> - **Girdi sentezler.** Bir istemci uygulamanızda tuşa basabilir ve widget'lara tıklayabilir. Kullanıcının klavyede yapabileceği her şeyi soket istemcisi de yapabilir.
+> - **Arayüzünüzün içeriğini açığa çıkarır.** Semantik ağaç etiketleri ve değerleri taşır — uygulamanızın gösterdiği her şey, sırlar dahil.
+> - **Yalnızca Unix soketi, 0600, TCP seçeneği yok.** Bu bilinçli ve yapılandırılabilir değil: bir port, uygulama kontrolünü o makineye erişebilen her şeye açardı. Güvenlik modelinin tamamı dosya izinleridir; soketi yalnızca kullanıcının yazabildiği bir yere koyun, örneğin `$XDG_RUNTIME_DIR`.
+> - **İstemedikçe kapalı.** Arkanızdan açabilecek bir ortam değişkeni anahtarı yok.
+> - **Hata ayıklama konsolu gibi davranın.** Yeri geliştirme ve CI'dır. Açık hâlde yayınlarsanız, arayüzünüzün uzaktan kontrolünü o kullanıcı olarak çalışan her yerel sürece yayınlamış olursunuz.
 
 ---
 
@@ -290,7 +342,7 @@ Limoni'nin 3D rasterizasyonunu, grafiklerini ve Braille vektör çizimlerini en 
 
 ### 3. Limoni Hızlı Animasyonlarda 60+ FPS Performansı Nasıl Korur?
 Limoni eşik tabanlı bir **Adaptif Flush Motoruna (Adaptive Flush Engine)** sahiptir:
-* **Seyrek Diffing (`dirtyRatio < 0.45`):** Yazma, imleç yanıp sönmesi veya sayaç güncellemeleri gibi seyrek durumlarda sadece değişen hücreleri hesaplayıp hassas imleç sıçramaları (`CUP`) gönderir (**`~7.1 µs`**, 0 B/op).
+* **Seyrek Diffing (`dirtyRatio < 0.45`):** Yazma, imleç yanıp sönmesi veya sayaç güncellemeleri gibi seyrek durumlarda sadece değişen hücreleri hesaplayıp hassas imleç sıçramaları (`CUP`) gönderir (**`~14.2 µs`**, 0 B/op).
 * **Tam Akış Yenileme (`dirtyRatio >= 0.45`):** 3D model dönüşü veya hızlı kaydırma gibi ekranın %45'inden fazlasının değiştiği durumlarda imleç sıçramaları terk edilir; DEC senkronize güncelleme modu (`\x1b[?2026h`) ve ana konuma dönüş (`\x1b[H`) ile ardışık tam akış gönderilir. Böylece yırtılma ve titreme olmadan **`0 B/op`** hız korunur.
 
 ---
