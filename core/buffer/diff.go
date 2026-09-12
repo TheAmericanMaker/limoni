@@ -31,6 +31,9 @@ type DiffOptions struct {
 	EraseChar bool
 	// RepeatChar allows REP (CSI n b) for runs of one glyph.
 	RepeatChar bool
+	// SyncOutput wraps the frame in synchronized update mode (?2026) so the
+	// terminal presents it atomically instead of tearing.
+	SyncOutput bool
 }
 
 // minEraseRun and minRepeatRun are the lengths at which a control sequence

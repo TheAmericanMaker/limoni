@@ -4,15 +4,18 @@ package driver
 
 import (
 	"os"
+	"sync"
 	"syscall/js"
 )
 
 // Backend manages WebAssembly browser execution with xterm.js / DOM events.
 type Backend struct {
-	events chan Event
-	done   chan struct{}
-	width  uint16
-	height uint16
+	events       chan Event
+	done         chan struct{}
+	width        uint16
+	height       uint16
+	inlineHeight uint16
+	inlineMu     sync.RWMutex
 }
 
 // NewBackend creates a new WASM Backend instance.
@@ -112,7 +115,11 @@ func (b *Backend) Setup() error {
 
 	// Written after the callbacks are registered, so the output bridge is in
 	// place by the time the first bytes are emitted.
-	_, err := b.Write([]byte(wasmSetupCmds))
+	setup := wasmSetupCmds
+	if height := b.Inline(); height > 0 {
+		setup = inlineSetupCmds(height)
+	}
+	_, err := b.Write([]byte(setup))
 	return err
 }
 
@@ -124,7 +131,11 @@ func (b *Backend) Close() error {
 	default:
 		close(b.done)
 	}
-	_, err := b.Write([]byte(wasmRestoreCmds))
+	restore := wasmRestoreCmds
+	if height := b.Inline(); height > 0 {
+		restore = inlineRestoreCmds(height)
+	}
+	_, err := b.Write([]byte(restore))
 	return err
 }
 
@@ -164,3 +175,21 @@ func (b *Backend) StartSyncUpdate() {}
 
 // EndSyncUpdate is a no-op on WASM.
 func (b *Backend) EndSyncUpdate() {}
+
+// SetInline switches the backend to inline rendering: no alternate screen, the
+// frame occupying height rows where the cursor already is, and the drawn output
+// left in the scrollback on exit. Zero restores full-screen behaviour.
+//
+// Must be called before Setup.
+func (b *Backend) SetInline(height uint16) {
+	b.inlineMu.Lock()
+	b.inlineHeight = height
+	b.inlineMu.Unlock()
+}
+
+// Inline reports the reserved row count, or zero for full-screen mode.
+func (b *Backend) Inline() uint16 {
+	b.inlineMu.RLock()
+	defer b.inlineMu.RUnlock()
+	return b.inlineHeight
+}

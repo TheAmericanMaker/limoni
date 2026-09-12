@@ -26,7 +26,26 @@ type Backend struct {
 	startOnce  sync.Once
 	closeOnce  sync.Once
 	closeErr   error
+	inline     uint16 // non-zero: render in place, reserving this many rows
 	mu         sync.RWMutex
+}
+
+// SetInline switches the backend to inline rendering: no alternate screen, the
+// frame occupying height rows where the cursor already is, and the drawn output
+// left in the scrollback on exit. Zero restores full-screen behaviour.
+//
+// Must be called before Setup.
+func (b *Backend) SetInline(height uint16) {
+	b.mu.Lock()
+	b.inline = height
+	b.mu.Unlock()
+}
+
+// Inline reports the reserved row count, or zero for full-screen mode.
+func (b *Backend) Inline() uint16 {
+	b.mu.RLock()
+	defer b.mu.RUnlock()
+	return b.inline
 }
 
 // NewBackend creates a new TTY Driver/Backend instance.
@@ -79,7 +98,13 @@ func (b *Backend) SetSize(w, h uint16) {
 // Setup switches the terminal into raw mode and sends screen setup escape codes
 // (alternate screen buffer, hide cursor, SGR mouse tracking, focus in/out reporting, bracketed paste, disable auto-wrap).
 func (b *Backend) Setup() error {
+	// Inline mode keeps the normal screen buffer and leaves auto-wrap on: the
+	// frame lives among the user's scrollback rather than replacing it, and a
+	// row that overflows should wrap the way ordinary terminal output does.
 	setupCmds := "\x1b[?1049h\x1b[?25l\x1b[?1003h\x1b[?1006h\x1b[?1004h\x1b[?2004h\x1b[?7l"
+	if height := b.Inline(); height > 0 {
+		setupCmds = inlineSetupCmds(height)
+	}
 	if b.portableIO != nil {
 		_, err := b.portableIO.Write([]byte(setupCmds))
 		return err
@@ -123,6 +148,11 @@ func (b *Backend) Close() error {
 		}
 
 		restoreCmds := "\x1b[0m\x1b[?7h\x1b[?2004l\x1b[?1004l\x1b[?1006l\x1b[?1003l\x1b[?25h\x1b[?1049l"
+		if height := b.Inline(); height > 0 {
+			// Park the cursor below the frame so the shell prompt lands after
+			// it, and leave what was drawn on screen.
+			restoreCmds = inlineRestoreCmds(height)
+		}
 
 		if b.portableIO != nil {
 			_, b.closeErr = b.portableIO.Write([]byte(restoreCmds))

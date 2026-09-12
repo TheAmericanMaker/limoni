@@ -13,17 +13,19 @@ import (
 
 // Backend Windows platformunda konsol I/O, Raw mode ve event döngüsünü yönetir.
 type Backend struct {
-	in         *os.File
-	out        *os.File
-	portableIO TerminalIO
-	state      *WindowsConsoleState
-	events     chan Event
-	done       chan struct{}
-	width      uint16
-	height     uint16
-	startOnce  sync.Once
-	closeOnce  sync.Once
-	closeErr   error
+	in           *os.File
+	out          *os.File
+	portableIO   TerminalIO
+	state        *WindowsConsoleState
+	events       chan Event
+	done         chan struct{}
+	width        uint16
+	height       uint16
+	startOnce    sync.Once
+	closeOnce    sync.Once
+	closeErr     error
+	inlineHeight uint16
+	inlineMu     sync.RWMutex
 }
 
 // NewBackend yeni bir Windows Backend örneği oluşturur.
@@ -72,6 +74,9 @@ func (b *Backend) SetSize(w, h uint16) {
 func (b *Backend) Setup() error {
 	if b.portableIO != nil {
 		setupCmds := "\x1b[?1049h\x1b[?25l\x1b[?1003h\x1b[?1006h\x1b[?1004h\x1b[?2004h\x1b[?7l"
+		if height := b.Inline(); height > 0 {
+			setupCmds = inlineSetupCmds(height)
+		}
 		_, err := b.portableIO.Write([]byte(setupCmds))
 		return err
 	}
@@ -83,6 +88,9 @@ func (b *Backend) Setup() error {
 	b.state = state
 
 	setupCmds := "\x1b[?1049h\x1b[?25l\x1b[?1003h\x1b[?1006h\x1b[?1004h\x1b[?2004h\x1b[?7l"
+	if height := b.Inline(); height > 0 {
+		setupCmds = inlineSetupCmds(height)
+	}
 	if _, err := b.out.WriteString(setupCmds); err != nil {
 		b.Close()
 		return fmt.Errorf("ekran hazirlik kodlari gonderilemedi: %w", err)
@@ -101,6 +109,9 @@ func (b *Backend) Close() error {
 		}
 
 		restoreCmds := "\x1b[0m\x1b[?7h\x1b[?2004l\x1b[?1004l\x1b[?1006l\x1b[?1003l\x1b[?25h\x1b[?1049l"
+		if height := b.Inline(); height > 0 {
+			restoreCmds = inlineRestoreCmds(height)
+		}
 		if b.portableIO != nil {
 			_, b.closeErr = b.portableIO.Write([]byte(restoreCmds))
 			return
@@ -304,4 +315,22 @@ func (b *Backend) EndSyncUpdate() {
 	if b.out != nil {
 		_, _ = b.out.WriteString("\x1b[?2026l")
 	}
+}
+
+// SetInline switches the backend to inline rendering: no alternate screen, the
+// frame occupying height rows where the cursor already is, and the drawn output
+// left in the scrollback on exit. Zero restores full-screen behaviour.
+//
+// Must be called before Setup.
+func (b *Backend) SetInline(height uint16) {
+	b.inlineMu.Lock()
+	b.inlineHeight = height
+	b.inlineMu.Unlock()
+}
+
+// Inline reports the reserved row count, or zero for full-screen mode.
+func (b *Backend) Inline() uint16 {
+	b.inlineMu.RLock()
+	defer b.inlineMu.RUnlock()
+	return b.inlineHeight
 }

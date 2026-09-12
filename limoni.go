@@ -166,7 +166,15 @@ var (
 // mouse and TrueColor tracking, and returns a fully ready-to-use Terminal.
 // The caller should defer term.Close() to restore the terminal state.
 func New() (*Terminal, error) {
+	return NewInline(0)
+}
+
+// NewInline is New with inline rendering: a height above zero reserves that
+// many rows in the normal screen buffer instead of switching to the alternate
+// screen, leaving the scrollback and the drawn frame in place on exit.
+func NewInline(height uint16) (*Terminal, error) {
 	b := driver.NewBackend(os.Stdin, os.Stdout)
+	b.SetInline(height)
 	if err := b.Setup(); err != nil {
 		return nil, err
 	}
@@ -175,6 +183,7 @@ func New() (*Terminal, error) {
 		_ = b.Close()
 		return nil, err
 	}
+	term.SetInline(height)
 	return term, nil
 }
 

@@ -105,4 +105,3 @@ func TestParseModifyOtherKeys(t *testing.T) {
 		t.Errorf("Alt+Enter \\x1b\\r failed: %+v (consumed %d)", ev, consumed)
 	}
 }
-

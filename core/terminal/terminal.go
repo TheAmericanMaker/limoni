@@ -24,6 +24,10 @@ type Terminal struct {
 	// back, ekranda o an çizili olan hücreleri tutan yedek tampondur (diff alma amacıyla kullanılır).
 	back *buffer.Buffer
 
+	// inline, sıfırdan büyükse uygulama alternatif ekran yerine normal ekranda
+	// bu kadar satırlık bir alanda çizilir.
+	inline uint16
+
 	// frame, çizim döngüsü sırasında widget'lara sunulan çizim ve tıklama alanı kayıt bağlamıdır.
 	frame *Frame
 
@@ -166,6 +170,10 @@ func (t *Terminal) Draw(fn func(f *Frame)) error {
 	t0 := time.Now()
 	// Güncel ekran boyutunu sorgula
 	w, h, err := t.driver.Size()
+	if t.inline > 0 {
+		// An inline application owns a fixed band of rows, not the screen.
+		h = t.inline
+	}
 	if err != nil {
 		return err
 	}
@@ -243,7 +251,12 @@ func (t *Terminal) Draw(fn func(f *Frame)) error {
 	needsFullClear := sizeChanged
 	if needsFullClear {
 		t.back.Resize(t.front.Area)
-		t.writeBuf = append(t.writeBuf, "\x1b[2J"...)
+		// ESC[2J clears the whole screen, which in inline mode means the user's
+		// scrollback. An inline frame owns only its own band, and DiffInline
+		// already erases each of its rows with EL.
+		if t.inline == 0 {
+			t.writeBuf = append(t.writeBuf, "\x1b[2J"...)
+		}
 	}
 
 	// ── 1. ADIM: Kitty/Sixel resimlerini tampona ekle (en arka piksel katmanı) ──
@@ -306,12 +319,22 @@ func (t *Terminal) Draw(fn func(f *Frame)) error {
 
 	// ── 2. ADIM: ASCII buffer'ı çiz (piksel katmanının ÜZERİNE) ──
 	var diffErr error
-	t.writeBuf, diffErr = buffer.DiffWithOptions(t.front, t.back, t.writeBuf, buffer.DiffOptions{
+	diffOpts := buffer.DiffOptions{
 		TrueColor:  t.caps.TrueColor,
 		Colors256:  t.caps.Colors256,
 		EraseChar:  t.caps.EraseChar,
 		RepeatChar: t.caps.RepeatChar,
-	})
+		// Draw already wrapped the frame in ?2026 above; wrapping again inside
+		// the encoder would nest the sequence.
+		SyncOutput: false,
+	}
+	if t.inline > 0 {
+		// Inline frames are emitted relative to the cursor, because the row the
+		// application starts on moves whenever the terminal scrolls.
+		t.writeBuf, diffErr = buffer.DiffInline(t.front, t.back, t.writeBuf, diffOpts)
+	} else {
+		t.writeBuf, diffErr = buffer.DiffWithOptions(t.front, t.back, t.writeBuf, diffOpts)
+	}
 	if diffErr != nil {
 		return diffErr
 	}
@@ -707,4 +730,13 @@ func (t *Terminal) Layers() []Layer {
 	layers := make([]Layer, len(t.frame.Layers))
 	copy(layers, t.frame.Layers)
 	return layers
+}
+
+// SetInline switches the terminal to inline rendering in a band of the given
+// height, leaving the alternate screen alone. Zero restores full-screen mode.
+//
+// The driver has to be told too, so it reserves the rows and skips the
+// alternate-screen switch; limoni.WithInline wires both.
+func (t *Terminal) SetInline(height uint16) {
+	t.inline = height
 }

@@ -25,6 +25,19 @@ type appConfig struct {
 	catchCtrlC     bool
 	fps            int
 	automationPath string
+	inlineHeight   uint16
+}
+
+// WithInline renders the application in place, in a band of the given height,
+// instead of taking over the screen.
+//
+// This is the mode `gum`, CI progress renderers and shell prompts use: the
+// scrollback above stays intact, and what the application drew is still on
+// screen after it exits. Full-screen mode is the default.
+func WithInline(height uint16) AppOption {
+	return func(c *appConfig) {
+		c.inlineHeight = height
+	}
 }
 
 // WithAutomation serves the application's semantic tree on a Unix socket, so
@@ -79,7 +92,7 @@ func Run(appFn func(f *Frame, ev *Event) bool, opts ...AppOption) error {
 		}
 	}
 
-	term, err := New()
+	term, err := NewInline(cfg.inlineHeight)
 	if err != nil {
 		return err
 	}
