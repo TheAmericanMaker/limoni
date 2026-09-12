@@ -17,7 +17,46 @@ const AdaptiveDiffThreshold = 0.45
 // - Case A (dirtyRatio < 0.45): Sparse differential rendering with minimal cursor jumps (CUP).
 // - Case B (dirtyRatio >= 0.45): Continuous full stream redraw with synchronized update mode (?2026).
 // Performance: Operates with zero heap allocations (0 B/op) when out has sufficient capacity.
+// DiffOptions selects the encodings the diff is allowed to emit.
+//
+// Emitted bytes, not CPU time, govern responsiveness over a network link, so
+// the encoder can compress runs — but only with sequences the terminal
+// actually implements. A terminal without REP prints the escape instead of
+// obeying it, which corrupts the frame, so these are opt-in per capability
+// rather than assumed.
+type DiffOptions struct {
+	TrueColor bool
+	Colors256 bool
+	// EraseChar allows ECH (CSI n X) for runs of blanks.
+	EraseChar bool
+	// RepeatChar allows REP (CSI n b) for runs of one glyph.
+	RepeatChar bool
+}
+
+// minEraseRun and minRepeatRun are the lengths at which a control sequence
+// becomes shorter than the literal cells it replaces. "CSI n X" is four bytes
+// at a single digit, so a run of four blanks breaks even and five wins.
+const (
+	minEraseRun  = 5
+	minRepeatRun = 5
+)
+
+// Diff compares the buffers with the default encodings. See DiffWithOptions
+// for control over run compression.
 func Diff(front, back *Buffer, out []byte, trueColor, colors256 bool) ([]byte, error) {
+	return DiffWithOptions(front, back, out, DiffOptions{
+		TrueColor: trueColor,
+		Colors256: colors256,
+		EraseChar: true,
+	})
+}
+
+// DiffWithOptions compares the buffers and appends the escape sequence stream.
+func DiffWithOptions(front, back *Buffer, out []byte, opts DiffOptions) ([]byte, error) {
+	return diff(front, back, out, opts)
+}
+
+func diff(front, back *Buffer, out []byte, opts DiffOptions) ([]byte, error) {
 	// Zero-Loop Fast-Path: Return immediately if buffer was not dirtied and dimensions match
 	if !front.IsDirty && front.Area.Width == back.Area.Width && front.Area.Height == back.Area.Height {
 		return out, nil
@@ -26,7 +65,7 @@ func Diff(front, back *Buffer, out []byte, trueColor, colors256 bool) ([]byte, e
 	// If dimensions mismatch, resize back buffer and execute full stream redraw
 	if front.Area.Width != back.Area.Width || front.Area.Height != back.Area.Height {
 		back.Resize(front.Area)
-		return DiffFullStream(front, back, out, trueColor, colors256)
+		return diffFullStream(front, back, out, opts)
 	}
 
 	width := front.Area.Width
@@ -52,15 +91,20 @@ func Diff(front, back *Buffer, out []byte, trueColor, colors256 bool) ([]byte, e
 
 	dirtyRatio := float64(dirtyCount) / float64(totalCells)
 	if dirtyRatio >= AdaptiveDiffThreshold {
-		return DiffFullStream(front, back, out, trueColor, colors256)
+		return diffFullStream(front, back, out, opts)
 	}
 
-	return DiffSparse(front, back, out, trueColor, colors256)
+	return diffSparse(front, back, out, opts)
 }
 
 // DiffSparse executes Case A: sparse differential rendering using cursor jumps (CUP)
 // for only modified spans within lines. Used when dirtyRatio < 0.45.
 func DiffSparse(front, back *Buffer, out []byte, trueColor, colors256 bool) ([]byte, error) {
+	return diffSparse(front, back, out, DiffOptions{TrueColor: trueColor, Colors256: colors256, EraseChar: true})
+}
+
+func diffSparse(front, back *Buffer, out []byte, opts DiffOptions) ([]byte, error) {
+	trueColor, colors256 := opts.TrueColor, opts.Colors256
 	width := front.Area.Width
 	height := front.Area.Height
 
@@ -157,6 +201,70 @@ func DiffSparse(front, back *Buffer, out []byte, trueColor, colors256 bool) ([]b
 				continue
 			}
 
+			// Run compression. A row of identical cells is common — padding,
+			// cleared regions, rules, fills — and writing it literally is the
+			// single largest avoidable cost in the emitted stream.
+			if opts.EraseChar || opts.RepeatChar {
+				run := uint16(1)
+				for nx := x + 1; nx <= uint16(last); nx++ {
+					nIdx := int(y)*int(width) + int(nx)
+					if front.Content[nIdx] != *frontCell {
+						break
+					}
+					// Only cells that actually need writing may be folded into
+					// a run; stopping at a clean cell keeps the diff minimal.
+					if front.Content[nIdx] == back.Content[nIdx] {
+						break
+					}
+					run++
+				}
+
+				isBlank := frontCell.Content == ' ' || frontCell.Content == 0
+				glyphWidth := cell.RuneWidth(frontCell.Content)
+
+				switch {
+				case opts.EraseChar && isBlank && run >= minEraseRun:
+					if cursorX != x || cursorY != y {
+						out = appendCursor(out, x, y)
+					}
+					if frontCell.Style != currentStyle {
+						out, currentStyle = appendStyle(out, currentStyle, frontCell.Style, trueColor, colors256, front.StyleCache)
+					}
+					out = append(out, "\x1b["...)
+					out = strconv.AppendInt(out, int64(run), 10)
+					out = append(out, 'X')
+					// ECH erases in place and leaves the cursor where it was,
+					// so the next write has to reposition.
+					cursorX, cursorY = 9999, 9999
+					for i := uint16(0); i < run; i++ {
+						back.Content[int(y)*int(width)+int(x+i)] = *frontCell
+					}
+					x += run - 1
+					continue
+
+				case opts.RepeatChar && !isBlank && glyphWidth == 1 && run >= minRepeatRun:
+					if cursorX != x || cursorY != y {
+						out = appendCursor(out, x, y)
+					}
+					if frontCell.Style != currentStyle {
+						out, currentStyle = appendStyle(out, currentStyle, frontCell.Style, trueColor, colors256, front.StyleCache)
+					}
+					out = utf8.AppendRune(out, frontCell.Content)
+					out = append(out, "\x1b["...)
+					out = strconv.AppendInt(out, int64(run-1), 10)
+					out = append(out, 'b')
+					cursorX, cursorY = x+run, y
+					if cursorX >= width {
+						cursorX, cursorY = 9999, 9999
+					}
+					for i := uint16(0); i < run; i++ {
+						back.Content[int(y)*int(width)+int(x+i)] = *frontCell
+					}
+					x += run - 1
+					continue
+				}
+			}
+
 			if cursorX != x || cursorY != y {
 				out = appendCursor(out, x, y)
 				cursorX = x
@@ -202,11 +310,22 @@ func DiffSparse(front, back *Buffer, out []byte, trueColor, colors256 bool) ([]b
 	return out, nil
 }
 
+// isBlankCell reports whether a cell renders as a space, which is what makes
+// it a candidate for erasure rather than a literal write.
+func isBlankCell(c *cell.Cell) bool {
+	return c.Content == ' ' || c.Content == 0 || c.Content < 32 || c.Content == 0x7F
+}
+
 // DiffFullStream executes Case B: continuous stream redraw for high-churn frames (dirtyRatio >= 0.45).
 // It bypasses cursor jump calculations entirely, wraps the output in synchronized update mode (?2026),
 // moves cursor to home (\x1b[H), sequentially overwrites line-by-line using \r\n,
 // maintains lazy SGR color emission, and synchronizes buffers via copy(back.Content, front.Content).
 func DiffFullStream(front, back *Buffer, out []byte, trueColor, colors256 bool) ([]byte, error) {
+	return diffFullStream(front, back, out, DiffOptions{TrueColor: trueColor, Colors256: colors256, EraseChar: true})
+}
+
+func diffFullStream(front, back *Buffer, out []byte, opts DiffOptions) ([]byte, error) {
+	trueColor, colors256 := opts.TrueColor, opts.Colors256
 	if front.Area.Width != back.Area.Width || front.Area.Height != back.Area.Height {
 		back.Resize(front.Area)
 	}
@@ -274,13 +393,60 @@ func DiffFullStream(front, back *Buffer, out []byte, trueColor, colors256 bool) 
 				continue
 			}
 
+			// Erase to end of line. Most of a typical frame is padding, and
+			// three bytes replace the whole tail of the row. EL erases with
+			// the current background, so it is only safe when every remaining
+			// cell shares one style.
+			if opts.EraseChar && isBlankCell(frontCell) {
+				tailStyle := frontCell.Style
+				tailBlank := true
+				for checkX := x + 1; checkX < width; checkX++ {
+					c := &front.Content[rowOffset+int(checkX)]
+					if !isBlankCell(c) || c.Style != tailStyle {
+						tailBlank = false
+						break
+					}
+				}
+				if tailBlank && width-x >= minEraseRun {
+					if tailStyle != currentStyle {
+						out, currentStyle = appendStyle(out, currentStyle, tailStyle, trueColor, colors256, front.StyleCache)
+					}
+					out = append(out, "\x1b[K"...)
+					break
+				}
+			}
+
+			// Repeat a run of one glyph. REP advances the cursor exactly as
+			// writing the glyph that many times would, so the sequential
+			// stream stays aligned.
+			if opts.RepeatChar && !isBlankCell(frontCell) && cell.RuneWidth(frontCell.Content) == 1 {
+				run := uint16(1)
+				for nx := x + 1; nx < width; nx++ {
+					if front.Content[rowOffset+int(nx)] != *frontCell {
+						break
+					}
+					run++
+				}
+				if run >= minRepeatRun {
+					if frontCell.Style != currentStyle {
+						out, currentStyle = appendStyle(out, currentStyle, frontCell.Style, trueColor, colors256, front.StyleCache)
+					}
+					out = utf8.AppendRune(out, frontCell.Content)
+					out = append(out, "\x1b["...)
+					out = strconv.AppendInt(out, int64(run-1), 10)
+					out = append(out, 'b')
+					x += run - 1
+					continue
+				}
+			}
+
 			// Lazy SGR style emission: only emit escape sequences when style changes
 			if frontCell.Style != currentStyle {
 				out, currentStyle = appendStyle(out, currentStyle, frontCell.Style, trueColor, colors256, front.StyleCache)
 			}
 
 			// Emit character rune
-			if frontCell.Content == ' ' || frontCell.Content == 0 || frontCell.Content < 32 || frontCell.Content == 0x7F {
+			if isBlankCell(frontCell) {
 				out = append(out, ' ')
 			} else {
 				out = utf8.AppendRune(out, frontCell.Content)

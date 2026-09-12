@@ -196,12 +196,19 @@ Bubble Tea v2 benchmark runner with a documented baseline.
 7. **Canvas markers.** Ratatui 0.30 added quadrant (2×2) and sextant (2×3) markers
    alongside Braille (2×4). Sextants help where Braille fonts are missing.
 
-8. **Inline (non-altscreen) render mode and diff bandwidth.** Ratatui has
-   `Viewport::Inline` and Ultraviolet emits `ECH`/`REP`/`ICH`/`DCH` plus
-   scroll-region optimisation; Limoni has neither. Inline mode is what `gum` and
-   CI progress renderers are built on, and emitted bytes govern responsiveness
-   over SSH. These are the two places a Ratatui user would still find Limoni
-   short.
+8. **Inline (non-altscreen) render mode.** Ratatui has `Viewport::Inline`;
+   Limoni always takes the alternate screen. Inline mode is what `gum` and CI
+   progress renderers are built on, and it is the last concrete thing a Ratatui
+   user would find missing.
+
+   Diff bandwidth is partly done: the encoder now emits `ECH`/`EL` for blank
+   runs and `REP` for repeated glyphs, which took a full-screen redraw from
+   4,897 bytes to 377 and `resize` from 2,735 to 162. `REP` is capability-gated
+   because a terminal without it prints the escape — it is on for recognised
+   terminals and `LIMONI_REP=1`, and becomes automatic once the capability
+   handshake (item 2) lands. Still open: `ICH`/`DCH` for line shifts and
+   scroll-region optimisation, which is where Ultraviolet's remaining advantage
+   lives.
 
    Border merging is done: `Block.MergeBorders` unions the box-drawing segments
    already in the cell, so adjacent blocks meet in `┬ ┼ ├ ┤ ┴`. It costs a read

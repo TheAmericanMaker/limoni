@@ -173,6 +173,7 @@ go run ./examples/charts
 ## ✨ Key Features
 
 * 🚀 **Ultra-Fast ANSI Diffing**: Computes dirty cell regions and emits minimal ANSI escape sequences in ~50 µs on a full-screen 120×40 change (~19,800 FPS) with zero heap allocations, short-circuiting in ~2 ns when clean. See [Benchmarks](#-benchmarks) for the measurement conditions.
+* 📉 **Run-Compressed Output**: Blank runs become `ECH`/`EL` and repeated glyphs become `REP`, which takes a full-screen redraw from 4,897 emitted bytes to **377** — 15× fewer than Ratatui 0.30.2 on the same frame. Emitted bytes, not CPU time, are what you feel over SSH.
 * 📦 **Contiguous 1D Buffer**: Flat memory layout eliminates pointer chasing and maximizes CPU L1/L2 cache locality.
 * 🎨 **TrueColor & Fallback Engine**: Full 24-bit RGB TrueColor support with automatic downsampling fallbacks for 256-color and 16-color terminals.
 * 📐 **Responsive Flexbox Layouts**: Declarative layout engine supporting proportional splits, minimum/maximum size constraints, and nested alignments.

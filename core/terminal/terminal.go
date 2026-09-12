@@ -306,7 +306,12 @@ func (t *Terminal) Draw(fn func(f *Frame)) error {
 
 	// ── 2. ADIM: ASCII buffer'ı çiz (piksel katmanının ÜZERİNE) ──
 	var diffErr error
-	t.writeBuf, diffErr = buffer.Diff(t.front, t.back, t.writeBuf, t.caps.TrueColor, t.caps.Colors256)
+	t.writeBuf, diffErr = buffer.DiffWithOptions(t.front, t.back, t.writeBuf, buffer.DiffOptions{
+		TrueColor:  t.caps.TrueColor,
+		Colors256:  t.caps.Colors256,
+		EraseChar:  t.caps.EraseChar,
+		RepeatChar: t.caps.RepeatChar,
+	})
 	if diffErr != nil {
 		return diffErr
 	}

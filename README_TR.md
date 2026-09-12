@@ -143,6 +143,7 @@ go run ./examples/charts
 ## ✨ Temel Özellikler
 
 * 🚀 **Ultra Hızlı ANSI Diffing**: Ekrandaki değişiklikleri tespit edip tam ekran yenilemede ~50 µs (~19.800 FPS) sürede sıfır bellek tahsisatıyla minimum ANSI kaçış dizilerini terminale gönderir; ekran değişmediğinde ~2 ns içinde anında döner.
+* 📉 **Koşu Sıkıştırmalı Çıktı**: Boş diziler `ECH`/`EL`, tekrarlayan glifler `REP` olur; bu, tam ekran yenilemeyi 4.897 bayttan **377 bayta** indiriyor — aynı karede Ratatui 0.30.2'nin 15 kat altında. SSH üzerinde hissettiğiniz şey CPU süresi değil, yayılan bayttır.
 * 📦 **1D Düz Tampon (Flat Buffer)**: Bellek parçalanmasını önler ve CPU L1/L2 önbellek erişimini maksimize eder.
 * 🎨 **24-Bit TrueColor & Otomatik Geri Dönüş**: TrueColor desteği olmayan terminallerde otomatik 256 ve 16 renk dönüşümü.
 * 📐 **Esnek Flexbox & Grid Düzeni**: Proportional, Fixed, Min/Max, GridArea ve boyut pazarlığı (negotiation) desteği.

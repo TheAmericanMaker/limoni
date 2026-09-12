@@ -54,6 +54,11 @@ func main() {
 		panic(err)
 	}
 
+	// Ultraviolet emits ECH/REP too, so enabling them here compares the same
+	// class of encoding rather than handicapping one side. Truecolor is pinned
+	// for the same reason.
+	diffOpts := buffer.DiffOptions{TrueColor: true, Colors256: true, EraseChar: true, RepeatChar: true}
+
 	workloads := make([]benchmarks.WorkloadReport, 0, len(specs))
 	for _, spec := range specs {
 		var runFn func() []byte
@@ -68,7 +73,7 @@ func main() {
 			var writeBuf []byte
 			runFn = func() []byte {
 				front.Clear()
-				writeBuf, _ = buffer.Diff(front, back, writeBuf[:0], true, true)
+				writeBuf, _ = buffer.DiffWithOptions(front, back, writeBuf[:0], diffOpts)
 				return writeBuf
 			}
 
@@ -91,7 +96,7 @@ func main() {
 						})
 					}
 				}
-				writeBuf, _ = buffer.Diff(front, back, writeBuf[:0], true, true)
+				writeBuf, _ = buffer.DiffWithOptions(front, back, writeBuf[:0], diffOpts)
 				return writeBuf
 			}
 
@@ -112,7 +117,7 @@ func main() {
 					front.SetCell(0, 0, cell.Cell{Content: 'Y'})
 				}
 				toggle = !toggle
-				writeBuf, _ = buffer.Diff(front, back, writeBuf[:0], true, true)
+				writeBuf, _ = buffer.DiffWithOptions(front, back, writeBuf[:0], diffOpts)
 				return writeBuf
 			}
 
@@ -128,7 +133,7 @@ func main() {
 				front.Clear()
 				frame.Reset()
 				frame.RenderWidget(p, area)
-				writeBuf, _ = buffer.Diff(front, back, writeBuf[:0], true, true)
+				writeBuf, _ = buffer.DiffWithOptions(front, back, writeBuf[:0], diffOpts)
 				return writeBuf
 			}
 
@@ -144,7 +149,7 @@ func main() {
 				front.Clear()
 				frame.Reset()
 				frame.RenderWidget(p, area)
-				writeBuf, _ = buffer.Diff(front, back, writeBuf[:0], true, true)
+				writeBuf, _ = buffer.DiffWithOptions(front, back, writeBuf[:0], diffOpts)
 				return writeBuf
 			}
 
@@ -177,7 +182,7 @@ func main() {
 				front.Clear()
 				frame.Reset()
 				frame.RenderWidget(table, area)
-				writeBuf, _ = buffer.Diff(front, back, writeBuf[:0], true, true)
+				writeBuf, _ = buffer.DiffWithOptions(front, back, writeBuf[:0], diffOpts)
 				return writeBuf
 			}
 
@@ -207,7 +212,7 @@ func main() {
 					Offset: &offset,
 					Style:  cell.Style{},
 				}, area)
-				writeBuf, _ = buffer.Diff(front, back, writeBuf[:0], true, true)
+				writeBuf, _ = buffer.DiffWithOptions(front, back, writeBuf[:0], diffOpts)
 				return writeBuf
 			}
 
@@ -225,7 +230,7 @@ func main() {
 					frame.RegisterClickHandler(cell.NewRect(uint16(i), 0, 1, 1), func(driver.MouseEvent) {})
 				}
 				frame.DispatchEventRegions(driver.MouseEvent{X: 50, Y: 0, Button: driver.MouseLeft})
-				writeBuf, _ = buffer.Diff(front, back, writeBuf[:0], true, true)
+				writeBuf, _ = buffer.DiffWithOptions(front, back, writeBuf[:0], diffOpts)
 				return writeBuf
 			}
 
@@ -252,7 +257,7 @@ func main() {
 					layerArea := cell.NewRect(uint16((i+step)%70), uint16((i+step)%20), 10, 3)
 					frame.RenderWidget(&blocks[i], layerArea)
 				}
-				writeBuf, _ = buffer.Diff(front, back, writeBuf[:0], true, true)
+				writeBuf, _ = buffer.DiffWithOptions(front, back, writeBuf[:0], diffOpts)
 				return writeBuf
 			}
 
@@ -273,7 +278,7 @@ func main() {
 					front.Resize(cell.NewRect(0, 0, spec.Width, spec.Height))
 				}
 				toggle = !toggle
-				writeBuf, _ = buffer.Diff(front, back, writeBuf[:0], true, true)
+				writeBuf, _ = buffer.DiffWithOptions(front, back, writeBuf[:0], diffOpts)
 				return writeBuf
 			}
 
@@ -308,7 +313,7 @@ func main() {
 				front.Clear()
 				frame.Reset()
 				frame.RenderWidget(imgWidget, area)
-				writeBuf, _ = buffer.Diff(front, back, writeBuf[:0], true, true)
+				writeBuf, _ = buffer.DiffWithOptions(front, back, writeBuf[:0], diffOpts)
 				return writeBuf
 			}
 		}

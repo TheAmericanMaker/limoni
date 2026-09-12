@@ -152,17 +152,25 @@ spread, `(max − min) / median`.
 
 | Workload | Limoni | Ultraviolet | ratio | Limoni bytes/frame | UV bytes/frame |
 | :--- | ---: | ---: | ---: | ---: | ---: |
-| `table-10000` | 85.9 µs ±0% | 335.8 µs ±2% | 3.9× | 298 | 1136 |
-| `hundred-layers` | 71.7 µs ±0% | 315.6 µs ±1% | 4.4× | 124 | 11743 |
-| `virtual-1000000` | 87.5 µs ±4% | 388.9 µs ±0% | 4.4× | 0 | 1888 |
-| `resize` | 14.6 µs ±19% | 90.6 µs ±1% | 6.2× | 2735 | 8 |
-| `full-redraw-120x40` | 59.3 µs ±0% | 475.4 µs ±0% | 8.0× | 4897 | 6329 |
-| `single-cell-update` | 9.7 µs ±0% | 89.7 µs ±1% | 9.2× | 7 | 3 |
-| `text-heavy-120x40` | 12.3 µs ±0% | 285.2 µs ±3% | 23.1× | 0 | 0 |
-| `unicode-emoji` | 5.6 µs ±0% | 138.7 µs ±1% | 24.8× | 0 | 25 |
+| `table-10000` | 87.7 µs ±1% | 337.1 µs ±1% | 3.8× | 298 | 1136 |
+| `hundred-layers` | 79.5 µs ±0% | 319.7 µs ±1% | 4.0× | 110 | 11743 |
+| `virtual-1000000` | 92.1 µs ±5% | 388.8 µs ±1% | 4.2× | 0 | 1888 |
+| `full-redraw-120x40` | 56.6 µs ±2% | 475.6 µs ±0% | 8.4× | 377 | 6329 |
+| `single-cell-update` | 9.4 µs ±0% | 89.7 µs ±1% | 9.5× | 7 | 3 |
+| `resize` | 8.7 µs ±14% | 89.8 µs ±0% | 10.4× | 162 | 8 |
+| `text-heavy-120x40` | 14.7 µs ±0% | 285.0 µs ±1% | 19.5× | 0 | 0 |
+| `unicode-emoji` | 6.5 µs ±1% | 138.0 µs ±1% | 21.3× | 0 | 25 |
 
 Byte counts were **bit-identical across all three runs** for every workload and
 every implementation, so that column carries no spread.
+
+The byte column moved sharply once the encoder learned to compress runs. A
+full-screen redraw went from 4,897 bytes to 377 by repeating a glyph with REP
+instead of writing it 120 times a row, and `resize` from 2,735 to 162 by
+erasing to end of line rather than painting the padding. Both runners are
+allowed the same class of encoding: Ultraviolet emits `ECH` and `REP` too, so
+enabling them on the Limoni side compares like with like rather than
+handicapping one.
 
 #### Workloads that are *not* comparable
 
@@ -245,13 +253,13 @@ machine, rustc 1.98.1. Median p50 across the three runs; ± is the full spread.
 
 | Workload | Limoni | Ratatui 0.30.2 | ratio | Limoni bytes/frame | Ratatui bytes/frame |
 | :--- | ---: | ---: | ---: | ---: | ---: |
-| `hundred-layers` | 71.7 µs ±0% | 106.4 µs ±0% | 1.5× | 124 | 911 |
-| `single-cell-update` | 9.7 µs ±0% | 15.6 µs ±0% | 1.6× | 7 | 32 |
-| `virtual-1000000` | 87.5 µs ±4% | 138.9 µs ±1% | 1.6× | 0 | 25 |
-| `full-redraw-120x40` | 59.3 µs ±0% | 172.4 µs ±0% | 2.9× | 4897 | 5828 |
-| `unicode-emoji` | 5.6 µs ±0% | 28.1 µs ±2% | 5.0× | 0 | 25 |
-| `text-heavy-120x40` | 12.3 µs ±0% | 64.2 µs ±1% | 5.2× | 0 | 25 |
-| `resize` | 14.6 µs ±19% | 95.1 µs ±5% | 6.5× | 2735 | 1856 |
+| `hundred-layers` | 79.5 µs ±0% | 106.3 µs ±2% | 1.3× | 110 | 911 |
+| `single-cell-update` | 9.4 µs ±0% | 15.9 µs ±3% | 1.7× | 7 | 32 |
+| `virtual-1000000` | 92.1 µs ±5% | 139.4 µs ±0% | 1.5× | 0 | 25 |
+| `full-redraw-120x40` | 56.6 µs ±2% | 173.6 µs ±2% | 3.1× | 377 | 5828 |
+| `unicode-emoji` | 6.5 µs ±1% | 27.9 µs ±1% | 4.3× | 0 | 25 |
+| `text-heavy-120x40` | 14.7 µs ±0% | 64.6 µs ±2% | 4.4× | 0 | 25 |
+| `resize` | 8.7 µs ±14% | 95.3 µs ±25% | 11.0× | 162 | 1856 |
 
 Byte counts were bit-identical across all three runs.
 
@@ -369,6 +377,11 @@ The harness (`benchmarks/metrics.go`) follows these rules:
 
 - **Warm-up.** `MeasureWorkloadWithWarmup` runs untimed iterations before
   recording, so JIT-free but cache-cold effects are excluded.
+- **Encoding capabilities are pinned, not sniffed.** The runners enable
+  truecolor, `ECH` and `REP` explicitly. In a real application `REP` is gated
+  on terminal support, because a terminal without it prints the escape instead
+  of obeying it; pinning it here keeps the comparison from depending on which
+  terminal happened to launch the benchmark.
 - **Persistent double buffer.** Diff benchmarks mutate a buffer that persists
   across iterations. The diff algorithm and the ANSI encoder both run end-to-end
   every iteration; there is no artificial `Clear()` that would let the diff
