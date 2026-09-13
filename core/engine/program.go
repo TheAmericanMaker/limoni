@@ -81,6 +81,7 @@ type programOptions struct {
 	fps          int
 	altScreen    bool
 	catchCtrlC   bool
+	observer     Observer
 }
 
 // Option configures a Program.
@@ -155,6 +156,11 @@ type Program struct {
 	altScreen  bool
 	catchCtrlC bool
 
+	observer Observer
+	// step counts messages passed to Update. Guarded by modelMu, which is what
+	// lets a frame be attributed to an exact point in the message stream.
+	step uint64
+
 	sequence atomic.Uint64
 	workers  sync.WaitGroup
 	stopOnce sync.Once
@@ -190,6 +196,7 @@ func New(options ...Option) *Program {
 		fps:            opts.fps,
 		altScreen:      opts.altScreen,
 		catchCtrlC:     opts.catchCtrlC,
+		observer:       opts.observer,
 		stop:           make(chan struct{}),
 	}
 }
@@ -343,6 +350,9 @@ func (p *Program) callInit() (commands []Cmd) {
 	defer p.modelMu.Unlock()
 	defer func() {
 		if recovered := recover(); recovered != nil {
+			if p.observer != nil {
+				p.observer.Panic(p.step, recovered)
+			}
 			p.reportPanic(recovered)
 		}
 	}()
@@ -352,9 +362,17 @@ func (p *Program) callInit() (commands []Cmd) {
 func (p *Program) update(ctx context.Context, message Msg) (quit bool) {
 	var result UpdateResult
 	p.modelMu.Lock()
+	p.step++
+	step := p.step
+	if p.observer != nil {
+		p.observer.Message(step, message)
+	}
 	func() {
 		defer func() {
 			if recovered := recover(); recovered != nil {
+				if p.observer != nil {
+					p.observer.Panic(step, recovered)
+				}
 				p.reportPanic(recovered)
 				quit = false
 			}
@@ -417,5 +435,8 @@ func (p *Program) View(frame *terminal.Frame) {
 		p.modelMu.Lock()
 		defer p.modelMu.Unlock()
 		p.model.View(frame)
+		if p.observer != nil {
+			p.observer.Frame(p.step, frame.AccessibilityTree())
+		}
 	}
 }

@@ -35,30 +35,7 @@ type Policy struct {
 	AllowUnverifiedPeers bool
 }
 
-// redactTree returns a copy of the tree with everything the policy withholds
-// removed. The input is not modified: it is the frame's tree, still owned by
-// the application.
+// redactTree applies the shared redaction rule with this policy's setting.
 func (p Policy) redactTree(nodes []accessibility.AccessibilityNode) []accessibility.AccessibilityNode {
-	if nodes == nil {
-		return nil
-	}
-	out := make([]accessibility.AccessibilityNode, len(nodes))
-	for i, node := range nodes {
-		out[i] = p.redactNode(node)
-	}
-	return out
-}
-
-func (p Policy) redactNode(node accessibility.AccessibilityNode) accessibility.AccessibilityNode {
-	// Unconditional. A widget that sets StateSensitive is meant to leave Value
-	// empty itself; clearing it here as well means one forgotten line in a
-	// widget does not become a leaked password.
-	if node.State&accessibility.StateSensitive != 0 {
-		node.Value = ""
-		node.Description = ""
-	} else if node.Role == accessibility.RoleInput && !p.ExposeInputValues {
-		node.Value = ""
-	}
-	node.Children = p.redactTree(node.Children)
-	return node
+	return accessibility.Redact(nodes, p.ExposeInputValues)
 }
