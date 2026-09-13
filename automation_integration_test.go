@@ -1,9 +1,12 @@
+//go:build limoni_debug
+
 package limoni
 
 import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -68,7 +71,7 @@ func TestAutomationDrivesARunningApplication(t *testing.T) {
 			}}, NewRect(40, 10, 10, 3))
 
 			return true
-		}, appConfig{automationPath: socket, automationPolicy: AutomationPolicy{AllowInput: true, ExposeScreen: true}, catchCtrlC: true})
+		}, appConfig{automationPath: socket, automationPolicy: AutomationPolicy{AllowInput: true, ExposeScreen: true, AllowUnverifiedPeers: runtime.GOOS == "windows"}, catchCtrlC: true})
 	}()
 	t.Cleanup(func() {
 		// runLoop exits when the application returns false, so ask it to.
@@ -234,7 +237,7 @@ func TestAutomationNeverLeaksASecretField(t *testing.T) {
 			return true
 		}, appConfig{
 			automationPath:   socket,
-			automationPolicy: AutomationPolicy{ExposeInputValues: true, ExposeScreen: true, AllowInput: true},
+			automationPolicy: AutomationPolicy{ExposeInputValues: true, ExposeScreen: true, AllowInput: true, AllowUnverifiedPeers: runtime.GOOS == "windows"},
 			catchCtrlC:       true,
 		})
 	}()

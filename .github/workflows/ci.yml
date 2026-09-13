@@ -120,10 +120,38 @@ jobs:
         shell: bash
         run: go vet ./...
 
+      # The automation gateway only exists in builds tagged limoni_debug, so its
+      # end-to-end tests only exist there too. Without this step they never run.
+      - name: Debug-tagged tests
+        shell: bash
+        run: |
+          go vet -tags limoni_debug .
+          go test -tags limoni_debug . ./automation/...
+
       - name: Race Detection
         if: runner.os != 'Windows'
         shell: bash
         run: go test -race . ./component ./core/engine ./core/terminal ./testkit ./widgets ./layout ./core/accessibility ./core/driver ./compat/bubbletea
+
+      # The build tag is only a guarantee if release binaries really do not
+      # contain the gateway. Importing automation from an untagged file in the
+      # root package would silently put it back; this catches that.
+      - name: Release binaries contain no automation code
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          set -euo pipefail
+          if go list -deps . | grep -q 'limoni/automation'; then
+            echo "FAIL the root package imports automation in an untagged build"
+            exit 1
+          fi
+          go build -o /tmp/release-simple ./examples/simple
+          count=$(go tool nm /tmp/release-simple | grep -c 'limoni/automation\.' || true)
+          if [ "$count" != "0" ]; then
+            echo "FAIL release binary contains $count automation symbols"
+            exit 1
+          fi
+          echo "ok   release binary contains no automation code"
 
       - name: Verify Zero-Allocation Hot Paths
         if: runner.os == 'Linux'

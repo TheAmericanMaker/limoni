@@ -26,6 +26,13 @@ type Policy struct {
 	// AllowInput permits key, text and click synthesis. Off by default: with it
 	// off, a client can observe the application but cannot act on it.
 	AllowInput bool
+
+	// AllowUnverifiedPeers accepts connections whose owning user the kernel
+	// cannot report. Linux, macOS and FreeBSD report it, and there a connection
+	// from any other user is always refused. Elsewhere — Windows among them —
+	// the socket's file permissions are the only protection, so the server
+	// refuses every connection unless this is set.
+	AllowUnverifiedPeers bool
 }
 
 // redactTree returns a copy of the tree with everything the policy withholds

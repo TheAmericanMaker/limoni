@@ -62,7 +62,7 @@ func startServer(t *testing.T) (*Server, *Client, *recorder) {
 	rec := &recorder{}
 	socket := shortSocketPath(t)
 
-	server, err := Listen(socket, WithPolicy(Policy{AllowInput: true, ExposeScreen: true}))
+	server, err := Listen(socket, WithPolicy(Policy{AllowInput: true, ExposeScreen: true, AllowUnverifiedPeers: !peerVerificationSupported}))
 	if err != nil {
 		t.Fatalf("Listen: %v", err)
 	}

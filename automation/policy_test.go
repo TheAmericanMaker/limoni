@@ -27,6 +27,7 @@ func sensitiveTree() []accessibility.AccessibilityNode {
 
 func startWithPolicy(t *testing.T, policy Policy) *Client {
 	t.Helper()
+	policy.AllowUnverifiedPeers = policy.AllowUnverifiedPeers || !peerVerificationSupported
 	server, err := Listen(shortSocketPath(t), WithPolicy(policy))
 	if err != nil {
 		t.Fatalf("Listen: %v", err)

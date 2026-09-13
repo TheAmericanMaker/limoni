@@ -175,8 +175,11 @@ client.Click(automation.Selector{Role: "button", Label: "Submit"})
 yazarsınız. Seçici yeniden düzenlemeye, boyutlandırmaya ve stil değişimine dayanır, çünkü hiçbir şeyin nerede çizildiğinden söz etmez.
 
 ```go
-// Uygulama açıkça istemek zorunda. Varsayılan kapalı.
-limoni.Run(draw, limoni.WithAutomation("/run/user/1000/myapp.sock"))
+// Uygulama açık bir politikayla ister. -tags limoni_debug ile derleyin.
+limoni.Run(draw, limoni.WithAutomation("/run/user/1000/myapp.sock", limoni.AutomationPolicy{
+	AllowInput:   true, // varsayılan kapalı: olmadan istemci yalnızca gözlemleyebilir
+	ExposeScreen: true, // varsayılan kapalı: ızgara ekrandaki her karakteri içerir
+}))
 ```
 
 ```go
@@ -197,13 +200,15 @@ screen, _ := client.Screen() // ağacın ifade edemediği doğrulamalar için ha
 Protokol satır ayrımlı JSON, yani hata ayıklarken `socat` kullanılabilir bir istemcidir. Belirsiz bir seçici **hatadır**, yazı tura değil — iki eşleşen düğmeden sessizce ilkini seçen bir test, ikincisi eklendiği anda yanlış sebeple geçer; hangisini kastettiğinizi `Nth` ile söyleyin.
 
 > [!WARNING]
-> **Bu, çalışan bir sürece kontrol kanalı açar.** Etkinleştirmeden önce takası anlayın.
+> **Bu, çalışan bir sürece kontrol kanalı açar.** Her biri kendi başına kapalı başarısız olan katmanlar hâlinde kuruldu.
 >
-> - **Girdi sentezler.** Bir istemci uygulamanızda tuşa basabilir ve widget'lara tıklayabilir. Kullanıcının klavyede yapabileceği her şeyi soket istemcisi de yapabilir.
-> - **Arayüzünüzün içeriğini açığa çıkarır.** Semantik ağaç etiketleri ve değerleri taşır — uygulamanızın gösterdiği her şey, sırlar dahil.
-> - **Yalnızca Unix soketi, 0600, TCP seçeneği yok.** Bu bilinçli ve yapılandırılabilir değil: bir port, uygulama kontrolünü o makineye erişebilen her şeye açardı. Güvenlik modelinin tamamı dosya izinleridir; soketi yalnızca kullanıcının yazabildiği bir yere koyun, örneğin `$XDG_RUNTIME_DIR`.
-> - **İstemedikçe kapalı.** Arkanızdan açabilecek bir ortam değişkeni anahtarı yok.
-> - **Hata ayıklama konsolu gibi davranın.** Yeri geliştirme ve CI'dır. Açık hâlde yayınlarsanız, arayüzünüzün uzaktan kontrolünü o kullanıcı olarak çalışan her yerel sürece yayınlamış olursunuz.
+> - **Release derlemelerinde yok.** Geçit yalnızca `-tags limoni_debug` ile derlenen binary'lerde bulunur. Etiket olmadan `WithAutomation`, `Run`'ın `ErrAutomationNotCompiled` döndürmesine yol açar ve soket sunucusu binary'de hiç yer almaz — CI bir release binary derleyip sembol tablosunda otomasyon kodu arıyor. Hiçbir yapılandırma hatası, orada olmayan kodu açamaz.
+> - **Varsayılan kapalı.** Sıfır değerli `AutomationPolicy` yalnızca yapıyı gösterir: roller, etiketler, konumlar, sınırlar. Girdi değerleri, ekran görüntüsü ve girdi sentezi her biri kendi alanının açılmasını ister.
+> - **Sırlar politika ne derse desin çıkmaz.** `TextInput{Secret: true}` her karakter yerine maske glifi çizer, yani sır hücre tamponuna hiç girmez; düğümü değer taşımaz ve hassas olarak işaretlenir. Geçit hassas değerleri yine de temizler, böylece bunu unutan bir widget sızdırmaz. Seçiciler redakte edilmiş ağaçta çözülür, yani bir istemci `value="…"` eşleşip eşleşmediğine bakarak parola tahmin edemez.
+> - **Yalnızca sizin kullanıcınız bağlanabilir.** Linux, macOS ve FreeBSD'de sunucu, soketin 0600 izinlerine ek olarak bağlanan sürecin sahibini çekirdeğe sorar ve başka her kullanıcıyı reddeder. Çekirdeğin bunu söyleyemediği yerlerde — Windows dahil — dosya izinleri tek koruma kalacağı için `AllowUnverifiedPeers` açılmadıkça her bağlantı reddedilir.
+> - **Yalnızca Unix soketi, TCP seçeneği yok.** Bilinçli ve yapılandırılamaz: bir port, uygulama kontrolünü makineye erişebilen her şeye açardı.
+>
+> **Kalan riskler, açıkça:** *aynı kullanıcı olarak* çalışan başka bir süreç yine bağlanabilir — işletim sistemi yerel bir sokette kullanıcıdan güçlü bir kimlik sunmuyor. Ve siz işaretlemedikçe geçit, çizdiğiniz bir paragrafın sır olduğunu bilemez; `ExposeScreen` ekranda ne varsa gönderir. Bir `limoni_debug` binary'sine hata ayıklama konsolu gibi davranın.
 
 ---
 

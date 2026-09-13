@@ -167,6 +167,12 @@ func (s *Server) accept() {
 
 func (s *Server) serve(conn net.Conn) {
 	defer conn.Close()
+	if err := s.verifyPeer(conn); err != nil {
+		// One explanatory line, then the connection is gone. A client from the
+		// wrong user learns only that it was refused.
+		_ = json.NewEncoder(conn).Encode(Response{Err: err.Error()})
+		return
+	}
 	scanner := bufio.NewScanner(conn)
 	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
 	encoder := json.NewEncoder(conn)
@@ -281,6 +287,43 @@ func (s *Server) handle(req Request) Response {
 	default:
 		return Response{Err: fmt.Sprintf("automation: unknown op %q", req.Op)}
 	}
+}
+
+// verifyPeer admits a connection only from the user running the application.
+//
+// File permissions on the socket already say this, but they are one
+// misconfigured umask or directory away from failing open. The kernel's record
+// of who owns the connecting process is not, so the server checks both.
+func (s *Server) verifyPeer(conn net.Conn) error {
+	unixConn, ok := conn.(*net.UnixConn)
+	if !ok {
+		return fmt.Errorf("automation: refusing a non-Unix connection")
+	}
+	raw, err := unixConn.SyscallConn()
+	if err != nil {
+		return fmt.Errorf("automation: cannot inspect connection: %w", err)
+	}
+	uid, peerErr := -1, error(nil)
+	if ctrlErr := raw.Control(func(fd uintptr) { uid, peerErr = peerUID(fd) }); ctrlErr != nil {
+		peerErr = ctrlErr
+	}
+	return admitPeer(uid, peerErr, os.Getuid(), s.policy.AllowUnverifiedPeers)
+}
+
+// admitPeer is the admission decision on its own, so it can be tested without
+// a second user account. Fails closed: an unknown peer is refused unless the
+// policy says otherwise, and a known peer must be this process's user.
+func admitPeer(peer int, peerErr error, self int, allowUnverified bool) error {
+	if peerErr != nil {
+		if allowUnverified {
+			return nil
+		}
+		return fmt.Errorf("automation: connection refused, the connecting user cannot be verified on this platform (Policy.AllowUnverifiedPeers): %w", peerErr)
+	}
+	if peer != self {
+		return fmt.Errorf("automation: connection refused, peer runs as uid %d, not %d", peer, self)
+	}
+	return nil
 }
 
 // checkInput refuses input synthesis unless the policy allows it and the

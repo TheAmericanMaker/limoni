@@ -1,9 +1,8 @@
 package limoni
 
 import (
+	"errors"
 	"time"
-
-	"github.com/thebanri/limoni/automation"
 )
 
 var wakeupChan = make(chan struct{}, 1)
@@ -44,6 +43,9 @@ type AutomationPolicy struct {
 	ExposeScreen bool
 	// AllowInput permits key, text and click synthesis.
 	AllowInput bool
+	// AllowUnverifiedPeers accepts connections on platforms that cannot report
+	// the connecting user. Without it, those platforms refuse every connection.
+	AllowUnverifiedPeers bool
 }
 
 // WithInline renders the application in place, in a band of the given height,
@@ -119,6 +121,22 @@ func Run(appFn func(f *Frame, ev *Event) bool, opts ...AppOption) error {
 	return runLoop(term, appFn, cfg)
 }
 
+// ErrAutomationNotCompiled is returned by Run when WithAutomation is used in a
+// binary built without the limoni_debug tag.
+//
+// This is the point of the tag. A release binary does not merely have
+// automation switched off; the socket server, the policy and the input
+// injector are not in it, so no configuration mistake can switch them on.
+var ErrAutomationNotCompiled = errors.New("limoni: automation is not compiled into this binary; build with -tags limoni_debug")
+
+// gateway carries application state out of the process and synthetic input
+// back in. See app_gateway_debug.go; release builds have no implementation.
+type gateway interface {
+	publish(f *Frame)
+	events() <-chan Event
+	close() error
+}
+
 // runLoop is Run's body with the terminal supplied, so the loop — including
 // the automation wiring — can be exercised against a headless terminal instead
 // of only against a tty.
@@ -126,44 +144,20 @@ func runLoop(term *Terminal, appFn func(f *Frame, ev *Event) bool, cfg appConfig
 	var err error
 	term.StartEventLoop()
 
-	// Synthetic events are delivered on their own channel rather than pushed
-	// into the driver's, so automation can never race the input parser.
-	var (
-		autoServer *automation.Server
-		injected   chan Event
-	)
-	if cfg.automationPath != "" {
-		autoServer, err = automation.Listen(cfg.automationPath, automation.WithPolicy(automation.Policy(cfg.automationPolicy)))
-		if err != nil {
-			return err
-		}
-		defer autoServer.Close()
-		injected = make(chan Event, 64)
+	// The gateway is everything that carries application state out of the
+	// process — the automation socket today. Its implementation only exists in
+	// builds tagged limoni_debug; a release build gets a stub that refuses to
+	// start one, so the code is not merely disabled but absent from the binary.
+	gw, err := openGateway(cfg)
+	if err != nil {
+		return err
 	}
-	publish := func(f *Frame) {
-		if autoServer == nil {
-			return
-		}
-		focused := ""
-		if f.FocusManager != nil {
-			focused = f.FocusManager.Focused()
-		}
-		autoServer.Publish(automation.Snapshot{
-			Tree:    f.AccessibilityTree(),
-			Screen:  f.Buffer.Snapshot(),
-			Focused: focused,
-			Width:   f.Buffer.Area.Width,
-			Height:  f.Buffer.Area.Height,
-			Injector: func(ev Event) {
-				select {
-				case injected <- ev:
-				default:
-					// Dropped rather than blocking the automation handler: a
-					// client that outruns the render loop gets backpressure as
-					// a lost event, not a deadlocked application.
-				}
-			},
-		})
+	var injected <-chan Event
+	publish := func(*Frame) {}
+	if gw != nil {
+		defer gw.close()
+		injected = gw.events()
+		publish = gw.publish
 	}
 
 	running := true

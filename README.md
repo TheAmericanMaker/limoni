@@ -205,8 +205,11 @@ client.Click(automation.Selector{Role: "button", Label: "Submit"})
 The selector survives relayout, resizing and restyling, because it never mentions where anything is drawn.
 
 ```go
-// The application opts in. Off by default.
-limoni.Run(draw, limoni.WithAutomation("/run/user/1000/myapp.sock"))
+// The application opts in, with an explicit policy. Build with -tags limoni_debug.
+limoni.Run(draw, limoni.WithAutomation("/run/user/1000/myapp.sock", limoni.AutomationPolicy{
+	AllowInput:   true, // off by default: without it a client can only observe
+	ExposeScreen: true, // off by default: the grid holds every character on screen
+}))
 ```
 
 ```go
@@ -227,13 +230,15 @@ screen, _ := client.Screen() // the raw grid, for assertions the tree cannot mak
 The protocol is newline-delimited JSON, so `socat` is a usable client when debugging. An ambiguous selector is an **error**, not a coin toss — a test that silently takes the first of two matching buttons passes for the wrong reason as soon as the second one appears; pass `Nth` to say which you meant.
 
 > [!WARNING]
-> **This opens a control channel into a running process.** Understand the trade before enabling it.
+> **This opens a control channel into a running process.** It is built in layers so that each one fails closed on its own.
 >
-> - **It synthesises input.** A client can press keys and click widgets in your application. Anything a user could do at the keyboard, a socket client can do.
-> - **It exposes your UI's contents.** The semantic tree carries labels and values — which may include whatever your application is displaying, secrets included.
-> - **Unix socket only, 0600, no TCP option.** This is deliberate and not configurable: a port would offer application control to anything that can reach the host. File permissions are the whole security model, so put the socket somewhere only the user can write, such as `$XDG_RUNTIME_DIR`.
-> - **Off unless you ask for it.** There is no environment-variable switch that could turn it on behind your back.
-> - **Treat it as a debug console.** It belongs in development and CI. If you ship it enabled, you are shipping remote control of your UI to every local process running as that user.
+> - **Absent from release builds.** The gateway only exists in binaries built with `-tags limoni_debug`. Without the tag, `WithAutomation` makes `Run` return `ErrAutomationNotCompiled`, and the socket server is not in the binary at all — CI builds a release binary and checks its symbol table for any automation code. No configuration mistake can switch on code that is not there.
+> - **Closed by default.** The zero `AutomationPolicy` exposes structure only: roles, labels, positions, bounds. Input values, the screen snapshot and input synthesis each need their own field set.
+> - **Secrets never leave, whatever the policy says.** `TextInput{Secret: true}` draws a mask glyph per character, so the secret never reaches the cell buffer, and its node carries no value and is marked sensitive. The gateway clears sensitive values again regardless, so a widget that forgets does not leak. Selectors are resolved against the redacted tree, so a client cannot guess a password and learn it from whether `value="…"` matched.
+> - **Only your user can connect.** On Linux, macOS and FreeBSD the server asks the kernel who owns the connecting process and refuses any other user, in addition to the socket's 0600 permissions. Where the kernel cannot say — Windows among them — every connection is refused unless `AllowUnverifiedPeers` is set, because file permissions would be the only protection left.
+> - **Unix socket only, no TCP option.** Deliberate and not configurable: a port would offer application control to anything that can reach the host.
+>
+> **What is left, stated plainly:** another process running *as the same user* can still connect — the operating system offers no stronger identity than the user for a local socket. And the gateway cannot know that a paragraph you render is secret unless you mark it; `ExposeScreen` sends whatever is on screen. Treat a `limoni_debug` binary as you would a debug console.
 
 ---
 
