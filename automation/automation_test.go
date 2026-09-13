@@ -348,3 +348,25 @@ func TestOverlongSocketPathIsRejectedClearly(t *testing.T) {
 		t.Errorf("error does not explain the length limit: %v", err)
 	}
 }
+
+// An application shutting down must not wait on its clients. A connected
+// agent or test holds its connection open indefinitely, and Close used to
+// wait for every connection to end on its own — so the application hung on
+// exit for as long as anything was attached.
+func TestCloseDoesNotWaitForConnectedClients(t *testing.T) {
+	server, client, _ := startServer(t)
+	if _, _, _, err := client.Hello(); err != nil {
+		t.Fatalf("hello: %v", err)
+	}
+
+	closed := make(chan error, 1)
+	go func() { closed <- server.Close() }()
+	select {
+	case <-closed:
+	case <-time.After(3 * time.Second):
+		t.Fatal("Close blocked on a connected client")
+	}
+	if _, _, _, err := client.Hello(); err == nil {
+		t.Error("the client's connection survived Close")
+	}
+}

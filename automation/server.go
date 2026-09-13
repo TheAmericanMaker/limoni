@@ -47,6 +47,9 @@ type Server struct {
 	closeOnce sync.Once
 	done      chan struct{}
 	wg        sync.WaitGroup
+
+	connMu sync.Mutex
+	conns  map[net.Conn]struct{}
 }
 
 // Option configures a Server.
@@ -98,7 +101,7 @@ func Listen(socketPath string, opts ...Option) (*Server, error) {
 		return nil, fmt.Errorf("automation: restrict socket permissions: %w", err)
 	}
 
-	s := &Server{listener: listener, path: socketPath, done: make(chan struct{})}
+	s := &Server{listener: listener, path: socketPath, done: make(chan struct{}), conns: make(map[net.Conn]struct{})}
 	for _, opt := range opts {
 		if opt != nil {
 			opt(s)
@@ -128,7 +131,11 @@ func (s *Server) Publish(state Snapshot) {
 	s.mu.Unlock()
 }
 
-// Close stops the server and removes the socket.
+// Close stops the server, disconnects every client and removes the socket.
+//
+// Clients are disconnected rather than waited for: an attached agent or test
+// keeps its connection open indefinitely, and an application must not hang on
+// exit because something is watching it.
 func (s *Server) Close() error {
 	if s == nil {
 		return nil
@@ -138,6 +145,11 @@ func (s *Server) Close() error {
 		close(s.done)
 		err = s.listener.Close()
 		_ = os.Remove(s.path)
+		s.connMu.Lock()
+		for conn := range s.conns {
+			_ = conn.Close()
+		}
+		s.connMu.Unlock()
 	})
 	s.wg.Wait()
 	return err
@@ -157,9 +169,25 @@ func (s *Server) accept() {
 				continue
 			}
 		}
+		s.connMu.Lock()
+		select {
+		case <-s.done:
+			// Close ran between Accept and here and will not see this one.
+			s.connMu.Unlock()
+			_ = conn.Close()
+			return
+		default:
+		}
+		s.conns[conn] = struct{}{}
 		s.wg.Add(1)
+		s.connMu.Unlock()
 		go func() {
 			defer s.wg.Done()
+			defer func() {
+				s.connMu.Lock()
+				delete(s.conns, conn)
+				s.connMu.Unlock()
+			}()
 			s.serve(conn)
 		}()
 	}
