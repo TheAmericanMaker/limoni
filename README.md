@@ -284,6 +284,8 @@ last frame:
   …
 ```
 
+Every action is logged, so a failure arrives with the steps that led to it, and `uitest.WithSlowMo` paces a test for someone watching. Pointed at a running application with `uitest.Connect`, the same test drives it on screen — `TestLiveDemo` in [`examples/agent_checklist`](examples/agent_checklist) does exactly that.
+
 One API, three targets: `uitest.Run` for an immediate-mode draw function, `uitest.Program` for a declarative model running through its real message loop (commands included), and `uitest.Connect` for a running binary over its automation socket. [`examples/agent_checklist`](examples/agent_checklist) is tested with it, and is the same application an agent drives through `limoni-mcp`.
 
 Lists expose their visible rows as `list-item` children, so a row is addressed by its text rather than by counting key presses.

@@ -74,11 +74,35 @@ func WithTimeout(d time.Duration) Option {
 	}
 }
 
+// WithSlowMo pauses for d after every action, so a person can follow a test
+// driving a visible application — for a demo, or for working out why a test
+// does what it does. Assertions are not slowed; they already wait for as long
+// as they need to.
+func WithSlowMo(d time.Duration) Option {
+	return func(p *Page) {
+		if d > 0 {
+			p.slowMo = d
+		}
+	}
+}
+
 // Page is one application under test.
 type Page struct {
 	t       testing.TB
 	app     app
 	timeout time.Duration
+	slowMo  time.Duration
+}
+
+// acted records an action in the test log — shown with go test -v, and above
+// the failure message when a later step fails, so the failure comes with the
+// steps that led to it — then applies the slow-motion pause.
+func (p *Page) acted(format string, args ...any) {
+	p.t.Helper()
+	p.t.Logf("uitest: "+format, args...)
+	if p.slowMo > 0 {
+		time.Sleep(p.slowMo)
+	}
 }
 
 // app is what a page drives: an in-process application or a remote one.
@@ -352,6 +376,7 @@ func (p *Page) Press(key string) {
 	if err := p.app.key(ev, name); err != nil {
 		p.t.Fatalf("uitest: press %s: %v", key, err)
 	}
+	p.acted("press %s", key)
 }
 
 // Type sends text to whatever has focus, one key press per character.
@@ -360,6 +385,8 @@ func (p *Page) Type(text string) {
 	if err := p.app.typeText(text); err != nil {
 		p.t.Fatalf("uitest: type %q: %v", text, err)
 	}
+	// The text itself is not logged: it may be a password.
+	p.acted("type %d character(s)", len([]rune(text)))
 }
 
 // Exited reports whether an in-process application has quit — its draw

@@ -174,6 +174,7 @@ func (l Locator) Click() {
 	if err := l.page.app.click(node, l.selectorFor(node)); err != nil {
 		l.page.t.Fatalf("uitest: click %s: %v", l, err)
 	}
+	l.page.acted("click %s", l)
 }
 
 // selectorFor is the selector a remote application resolves a click with. A
@@ -198,6 +199,8 @@ func (l Locator) Type(text string) {
 	if err := l.page.app.typeText(text); err != nil {
 		l.page.t.Fatalf("uitest: type into %s: %v", l, err)
 	}
+	// The text itself is not logged: it may be a password.
+	l.page.acted("type %d character(s) into %s", len([]rune(text)), l)
 }
 
 // Press focuses the widget, by clicking it unless it already has focus, and
@@ -212,6 +215,7 @@ func (l Locator) Press(key string) {
 	if err := l.page.app.key(ev, name); err != nil {
 		l.page.t.Fatalf("uitest: press %s on %s: %v", key, l, err)
 	}
+	l.page.acted("press %s on %s", key, l)
 }
 
 func (l Locator) focus(action string) {

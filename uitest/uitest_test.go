@@ -353,3 +353,41 @@ func shortSocket(t *testing.T) string {
 	t.Cleanup(func() { _ = os.RemoveAll(dir) })
 	return filepath.Join(dir, "a.sock")
 }
+
+// Every action is logged, so a failure arrives with the steps before it, and
+// slow motion paces actions for a person watching.
+func TestActionsAreLoggedAndSlowMoPacesThem(t *testing.T) {
+	rec := &logT{TB: t}
+	app := newTodoApp()
+	page := Run(rec, 60, 24, app.draw, WithSlowMo(40*time.Millisecond))
+
+	start := time.Now()
+	page.GetByID("name").Type("secret-ish")
+	page.GetByRole("button", "Add").Click()
+	page.Press("tab")
+	elapsed := time.Since(start)
+
+	logs := strings.Join(rec.lines, "\n")
+	for _, want := range []string{`uitest: type 10 character(s) into id="name"`, `uitest: click role="button" label="Add"`, "uitest: press tab"} {
+		if !strings.Contains(logs, want) {
+			t.Errorf("log lacks %q:\n%s", want, logs)
+		}
+	}
+	if strings.Contains(logs, "secret-ish") {
+		t.Errorf("typed text was logged:\n%s", logs)
+	}
+	if elapsed < 3*40*time.Millisecond {
+		t.Errorf("three slowed actions took %s, want at least %s", elapsed, 3*40*time.Millisecond)
+	}
+}
+
+type logT struct {
+	testing.TB
+	lines []string
+}
+
+func (l *logT) Helper() {}
+
+func (l *logT) Logf(format string, args ...any) {
+	l.lines = append(l.lines, fmt.Sprintf(format, args...))
+}
