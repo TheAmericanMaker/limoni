@@ -1,4 +1,4 @@
-//go:build unix || darwin || linux
+//go:build linux || darwin || freebsd
 
 package main
 
@@ -11,8 +11,9 @@ func getDiskSpace() (usedGB, totalGB, percent float64) {
 		return 0, 0, 0
 	}
 
-	totalBytes := stat.Blocks * uint64(stat.Bsize)
-	freeBytes := stat.Bavail * uint64(stat.Bsize)
+	totalBytes := uint64(stat.Blocks) * uint64(stat.Bsize)
+	// The field types differ between platforms (Bavail is int64 on FreeBSD).
+	freeBytes := uint64(stat.Bavail) * uint64(stat.Bsize)
 	if totalBytes == 0 {
 		return 0, 0, 0
 	}
