@@ -110,6 +110,9 @@ The package was renamed to `core/engine`; that doc is stale in places.
 | `widgets` | The widget catalogue |
 | `graphics` | 3D meshes (OBJ/STL/PLY/GLB), shading, image protocol encoders |
 | `testkit` | Deterministic in-memory terminal, golden files |
+| `uitest` | Playwright-style locators and waiting assertions over the semantic tree |
+| `automation` | Semantic tree over a Unix socket (wired into apps only with `-tags limoni_debug`) |
+| `cmd/limoni-mcp` | MCP bridge from agents to the automation socket |
 | `benchmarks` | Harness plus the cross-framework runners |
 
 ---
@@ -189,11 +192,15 @@ Bubble Tea v2 benchmark runner with a documented baseline.
 
 3. **Agent-facing semantics.** `cmd/limoni-mcp` serves the automation socket
    as MCP tools, and a headless Claude Code run completed
-   `examples/agent_checklist` with it. What it exposed: `List` has no child
-   nodes for its rows, so an agent can only reach a row by keyboard; custom
-   widgets that embed `widgets.Accessible` are not focusable, so Tab skips
-   them. Test the bridge against a real app in a PTY as well as with
-   `go test` — the Tab bug below was invisible to unit tests.
+   `examples/agent_checklist` with it. `uitest` is the Playwright-style test
+   API over the same tree (in-process `Run`/`Program`, remote `Connect`).
+   Lists expose visible rows as children, from a buffer in `ListState` so the
+   draw path stays allocation-free — which is why `Frame.AccessibilityTree`
+   deep-copies and `f.Accessibility` must not be kept past a frame. Still
+   missing: `Table` rows, `TreeView` items and `Tabs` are flat; custom widgets
+   embedding `widgets.Accessible` are not focusable, so Tab skips them. Test
+   the bridge against a real app in a PTY as well as with `go test` — the Tab
+   bug below was invisible to unit tests.
 
    Fixed on the way, both worth remembering: `automation.Server.Close` waited
    for connected clients, so an app hung on exit while anything was attached;

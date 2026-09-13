@@ -222,6 +222,40 @@ Köprü aşağıdaki sınırların hiçbirini değiştirmez: yalnızca uygulaman
 
 Bir denemede Claude Code 2.1.270, yalnızca hedef söylenerek, bir görev ekledi, üçünü işaretledi, bir deploy token'ı yazdı ve 17 araç çağrısında deploy etti. Denemenin kaydındaki hiçbir araç sonucunda token geçmiyor. Bu bir denemedir, benchmark değil.
 
+### Playwright gibi test etmek (`uitest`)
+
+Aynı ağaç, Playwright'ın web sayfaları için yazdığı testlere benzeyen testler yazmayı sağlar. `uitest` widget'ları rol, etiket ve ID ile bulur, onlar üzerinde işlem yapar ve **bekleyen** kontrollerle doğrular: bir işlem, konumlandırıcısı tam olarak bir widget'la eşleşene kadar bekler; bir doğrulama tutana kadar yeniden dener. Böylece test hiçbir zaman `sleep` kullanmaz. Bir kontrol başarısız olduğunda mesaj neyin beklendiğini, neyin görüldüğünü ve son karenin tüm semantik ağacını gösterir.
+
+```go
+func TestReleaseFlow(t *testing.T) {
+	app := newChecklist()
+	page := uitest.Run(t, 80, 24, app.draw) // süreç içinde: terminal yok, build tag yok
+
+	page.GetByRole("input", "New task").Type("Tag v1.0")
+	page.GetByRole("button", "Add task").Click()
+
+	rows := page.GetByRole("list-item", "").Within(page.GetByRole("list", "Tasks"))
+	page.Expect(rows).ToHaveCount(3)
+	rows.Nth(-1).Click()
+	page.Press("space")
+
+	page.Expect(page.GetByID("status")).ToContainLabel("Added")
+	page.Expect(page.GetByRole("dialog", "")).Not().ToBeVisible()
+}
+```
+
+```
+uitest: expected id="status" to have label "Deployed with 3 tasks complete.": got label "Blocked: the deploy token is empty." after 5s
+last frame:
+  input#new-task "New task" bounds=2,2 36x1
+  button#add "Add task" bounds=40,2 14x1
+  …
+```
+
+Tek API, üç hedef: immediate-mode çizim fonksiyonu için `uitest.Run`, gerçek mesaj döngüsünden (komutlar dahil) geçen declarative model için `uitest.Program`, otomasyon soketi üzerinden çalışan bir binary için `uitest.Connect`. [`examples/agent_checklist`](examples/agent_checklist) bununla test ediliyor ve bir ajanın `limoni-mcp` üzerinden sürdüğü uygulamanın ta kendisi.
+
+Listeler görünür satırlarını `list-item` alt düğümleri olarak sunar; bir satıra tuş basışı sayarak değil, metniyle ulaşılır.
+
 > [!WARNING]
 > **Bu, çalışan bir sürece kontrol kanalı açar.** Her biri kendi başına kapalı başarısız olan katmanlar hâlinde kuruldu.
 >

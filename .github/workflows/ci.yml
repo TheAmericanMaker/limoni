@@ -131,7 +131,7 @@ jobs:
       - name: Race Detection
         if: runner.os != 'Windows'
         shell: bash
-        run: go test -race . ./component ./core/engine ./core/terminal ./testkit ./widgets ./layout ./core/accessibility ./core/driver ./compat/bubbletea ./automation ./cmd/limoni-mcp
+        run: go test -race . ./component ./core/engine ./core/terminal ./testkit ./widgets ./layout ./core/accessibility ./core/driver ./compat/bubbletea ./automation ./cmd/limoni-mcp ./uitest ./examples/agent_checklist
 
       # The build tag is only a guarantee if release binaries really do not
       # contain the gateway. Importing automation from an untagged file in the

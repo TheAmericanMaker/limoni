@@ -399,6 +399,11 @@ var namedKeys = map[string]driver.KeyType{
 	"f12":       driver.KeyF12,
 }
 
+// ParseKey turns a protocol key name — a single character, or "enter", "tab",
+// "esc", "up", "f1" and the rest of the names Request.Key lists — into the key
+// event it stands for, without modifiers.
+func ParseKey(name string) (driver.KeyEvent, error) { return parseKey(name) }
+
 func parseKey(name string) (driver.KeyEvent, error) {
 	if name == "" {
 		return driver.KeyEvent{}, fmt.Errorf("automation: empty key")

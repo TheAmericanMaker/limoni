@@ -254,6 +254,40 @@ The bridge changes none of the limits below: it can do only what the application
 
 In one run, Claude Code 2.1.270, told only the goal, added a task, ticked three, typed a deploy token and deployed in 17 tool calls. The run's transcript contains no tool result with the token in it. That is one run, not a benchmark.
 
+### Testing it like Playwright (`uitest`)
+
+The same tree makes for tests that read like the ones Playwright writes for web pages. `uitest` finds widgets by role, label and ID, acts on them, and asserts with checks that **wait**: an action waits until its locator matches exactly one widget, and an assertion retries until it holds, so a test never sleeps. When a check does fail, the message shows what was expected, what was seen and the whole semantic tree of the last frame.
+
+```go
+func TestReleaseFlow(t *testing.T) {
+	app := newChecklist()
+	page := uitest.Run(t, 80, 24, app.draw) // in process: no terminal, no build tag
+
+	page.GetByRole("input", "New task").Type("Tag v1.0")
+	page.GetByRole("button", "Add task").Click()
+
+	rows := page.GetByRole("list-item", "").Within(page.GetByRole("list", "Tasks"))
+	page.Expect(rows).ToHaveCount(3)
+	rows.Nth(-1).Click()
+	page.Press("space")
+
+	page.Expect(page.GetByID("status")).ToContainLabel("Added")
+	page.Expect(page.GetByRole("dialog", "")).Not().ToBeVisible()
+}
+```
+
+```
+uitest: expected id="status" to have label "Deployed with 3 tasks complete.": got label "Blocked: the deploy token is empty." after 5s
+last frame:
+  input#new-task "New task" bounds=2,2 36x1
+  button#add "Add task" bounds=40,2 14x1
+  …
+```
+
+One API, three targets: `uitest.Run` for an immediate-mode draw function, `uitest.Program` for a declarative model running through its real message loop (commands included), and `uitest.Connect` for a running binary over its automation socket. [`examples/agent_checklist`](examples/agent_checklist) is tested with it, and is the same application an agent drives through `limoni-mcp`.
+
+Lists expose their visible rows as `list-item` children, so a row is addressed by its text rather than by counting key presses.
+
 > [!WARNING]
 > **This opens a control channel into a running process.** It is built in layers so that each one fails closed on its own.
 >
