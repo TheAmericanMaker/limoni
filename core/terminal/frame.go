@@ -90,7 +90,9 @@ type Frame struct {
 	ThemeSet bool
 
 	// WidgetStats, bu çizim karesinde çizilen widget'ların render sürelerini saklar.
-	WidgetStats   []WidgetStat
+	WidgetStats []WidgetStat
+	// Accessibility holds this frame's semantic nodes. Children may point into
+	// buffers widgets reuse next frame; use AccessibilityTree to keep a copy.
 	Accessibility []accessibility.AccessibilityNode
 
 	// Pre-allocated context parameters and closures to avoid heap allocation
@@ -352,13 +354,29 @@ func (f *Frame) RegisterAccessibility(node accessibility.AccessibilityNode) {
 	}
 }
 
-// AccessibilityTree returns the nodes registered during the current frame.
+// AccessibilityTree returns a deep copy of the nodes registered during the
+// current frame.
+//
+// Widgets may build child nodes in buffers they reuse on the next frame — List
+// does, to stay allocation-free — so f.Accessibility is only valid until the
+// next draw. The copy is what the automation gateway, session recording and
+// tests hold on to.
 func (f *Frame) AccessibilityTree() []accessibility.AccessibilityNode {
 	if f == nil {
 		return nil
 	}
-	result := make([]accessibility.AccessibilityNode, len(f.Accessibility))
-	copy(result, f.Accessibility)
+	return cloneNodes(f.Accessibility)
+}
+
+func cloneNodes(nodes []accessibility.AccessibilityNode) []accessibility.AccessibilityNode {
+	if nodes == nil {
+		return nil
+	}
+	result := make([]accessibility.AccessibilityNode, len(nodes))
+	copy(result, nodes)
+	for i := range result {
+		result[i].Children = cloneNodes(result[i].Children)
+	}
 	return result
 }
 

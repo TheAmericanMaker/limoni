@@ -286,3 +286,44 @@ func TestTerminalAdvancedErgonomics(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+// A row found in the tree is a row that can be clicked: its bounds are where
+// the list draws it, so clicking their centre selects it. And a tree taken
+// from one frame must not change when the next frame reuses the list's row
+// buffer.
+func TestListRowsInTheTreeAreClickableAndStable(t *testing.T) {
+	term := NewTerminal(30, 6)
+	state := widgets.NewListState()
+	state.Selected = 0
+	draw := func(items ...string) {
+		term.Draw(func(frame *terminal.Frame) {
+			frame.RenderWidget(&widgets.List{ID: "fruit", Items: items, State: state}, cell.NewRect(0, 1, 30, 4))
+		})
+	}
+	draw("apple", "banana", "cherry")
+
+	first := term.AccessibilityTree()
+	var target accessibility.AccessibilityNode
+	for _, row := range first[0].Children {
+		if row.Label == "cherry" {
+			target = row
+		}
+	}
+	if target.Role != accessibility.RoleListItem {
+		t.Fatalf("no cherry row in %+v", first)
+	}
+	if !term.Click(target.Bounds.X+target.Bounds.Width/2, target.Bounds.Y) {
+		t.Fatal("click on the row's bounds hit nothing")
+	}
+	draw("kiwi", "lemon", "mango")
+
+	if state.Selected != 2 {
+		t.Errorf("selected = %d, want 2", state.Selected)
+	}
+	if got := first[0].Children[0].Label; got != "apple" {
+		t.Errorf("the earlier tree changed under the next frame: row 0 = %q", got)
+	}
+	if got := term.AccessibilityTree()[0].Value; got != "mango" {
+		t.Errorf("value after click = %q, want mango", got)
+	}
+}
