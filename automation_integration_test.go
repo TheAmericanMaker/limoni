@@ -1,8 +1,10 @@
 package limoni
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -66,7 +68,7 @@ func TestAutomationDrivesARunningApplication(t *testing.T) {
 			}}, NewRect(40, 10, 10, 3))
 
 			return true
-		}, appConfig{automationPath: socket, catchCtrlC: true})
+		}, appConfig{automationPath: socket, automationPolicy: AutomationPolicy{AllowInput: true, ExposeScreen: true}, catchCtrlC: true})
 	}()
 	t.Cleanup(func() {
 		// runLoop exits when the application returns false, so ask it to.
@@ -199,5 +201,80 @@ func dialWithRetry(t *testing.T, socket string) (*automation.Client, error) {
 			return nil, err
 		}
 		time.Sleep(5 * time.Millisecond)
+	}
+}
+
+// A password typed into a Secret field must not be recoverable through any
+// channel the automation socket offers — tree, find, focus or the rendered
+// screen — even with the most permissive policy.
+func TestAutomationNeverLeaksASecretField(t *testing.T) {
+	socket := shortSocketPath(t)
+	var stop atomic.Bool
+
+	pw := widgets.NewTextInputState()
+	pw.Text = []rune("hunter2")
+	pw.Cursor = len(pw.Text)
+
+	backend := driver.NewPortableBackend(driver.NewMemoryTerminalIO(nil, 60, 20))
+	if err := backend.Setup(); err != nil {
+		t.Fatalf("backend setup: %v", err)
+	}
+	term, err := terminal.New(backend)
+	if err != nil {
+		t.Fatalf("terminal: %v", err)
+	}
+
+	done := make(chan error, 1)
+	go func() {
+		done <- runLoop(term, func(f *Frame, ev *Event) bool {
+			if stop.Load() {
+				return false
+			}
+			f.RenderWidget(&widgets.TextInput{ID: "password", State: pw, Secret: true, Placeholder: "Password"}, NewRect(0, 0, 30, 1))
+			return true
+		}, appConfig{
+			automationPath:   socket,
+			automationPolicy: AutomationPolicy{ExposeInputValues: true, ExposeScreen: true, AllowInput: true},
+			catchCtrlC:       true,
+		})
+	}()
+	t.Cleanup(func() {
+		stop.Store(true)
+		Wakeup()
+		<-done
+		term.Close()
+	})
+
+	client, err := dialWithRetry(t, socket)
+	if err != nil {
+		t.Fatalf("dial: %v", err)
+	}
+	defer client.Close()
+
+	node, err := client.WaitFor(automation.Selector{ID: "password"}, 3*time.Second)
+	if err != nil {
+		t.Fatalf("waiting for the field: %v", err)
+	}
+	if node.State&accessibility.StateSensitive == 0 {
+		t.Error("field not reported as sensitive")
+	}
+
+	var wire []string
+	for _, op := range []automation.Op{automation.OpTree, automation.OpSnapshot, automation.OpFocused, automation.OpHello} {
+		resp, err := client.Do(automation.Request{Op: op})
+		if err != nil {
+			t.Fatalf("%s: %v", op, err)
+		}
+		b, _ := json.Marshal(resp)
+		wire = append(wire, string(b))
+	}
+	found, _ := client.Find(automation.Selector{Value: "hunter2"})
+	if len(found) != 0 {
+		t.Error("the secret is guessable through a value selector")
+	}
+	for _, payload := range wire {
+		if strings.Contains(payload, "hunter2") {
+			t.Fatalf("secret reached the wire: %s", payload)
+		}
 	}
 }

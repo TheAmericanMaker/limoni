@@ -226,6 +226,12 @@ type Response struct {
 	Width   uint16 `json:"width,omitempty"`
 	Height  uint16 `json:"height,omitempty"`
 
+	// AllowInput, ExposeScreen and ExposeInputValues report the server's policy
+	// in the hello response, so a client can tell a refusal apart from a bug.
+	AllowInput        bool `json:"allow_input,omitempty"`
+	ExposeScreen      bool `json:"expose_screen,omitempty"`
+	ExposeInputValues bool `json:"expose_input_values,omitempty"`
+
 	Nodes    []accessibility.AccessibilityNode `json:"nodes,omitempty"`
 	Snapshot string                            `json:"snapshot,omitempty"`
 	Focused  string                            `json:"focused,omitempty"`

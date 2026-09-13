@@ -127,6 +127,15 @@ type TextInput struct {
 	SelectionEnd     int
 	SelectionStyle   cell.Style
 	Focused          bool
+
+	// Secret masks the input for passwords and tokens. Every character is drawn
+	// as MaskRune, so the secret never reaches the cell buffer, and the
+	// accessibility node carries no value and is marked StateSensitive, so it
+	// never reaches a screen reader, the automation socket or a recording.
+	Secret bool
+	// MaskRune is the glyph drawn in place of each character when Secret is
+	// set. Defaults to '•'.
+	MaskRune rune
 }
 
 // NewTextInput creates a new TextInput widget with the specified ID.
@@ -251,9 +260,19 @@ func (ti TextInput) Draw(ctx cell.Context, buf *buffer.Buffer) {
 	} else {
 		var displayText strings.Builder
 		cursorVisualCol := 0
+		mask := ti.MaskRune
+		if mask == 0 {
+			mask = '•'
+		}
 		for idx, r := range ti.State.Text {
 			if idx == ti.State.Cursor {
 				cursorVisualCol = len([]rune(displayText.String()))
+			}
+			if ti.Secret {
+				// One mask glyph per character, newlines included: the expanded
+				// " ↵ " marker would reveal where the line breaks are.
+				displayText.WriteRune(mask)
+				continue
 			}
 			if r == '\n' {
 				displayText.WriteString(" ↵ ")
@@ -348,7 +367,9 @@ func (ti TextInput) AccessibilityNode(bounds cell.Rect, focused bool) accessibil
 		state |= accessibility.StateFocused
 	}
 	val := ""
-	if ti.State != nil {
+	if ti.Secret {
+		state |= accessibility.StateSensitive
+	} else if ti.State != nil {
 		val = string(ti.State.Text)
 	}
 	return accessibility.AccessibilityNode{

@@ -32,6 +32,11 @@ const (
 	StateChecked
 	StateBusy
 	StateInvalid
+	// StateSensitive marks a node whose value is secret, such as a password
+	// field. Widgets that set it must leave Value empty themselves; anything
+	// that carries the tree out of the process clears it again regardless, so a
+	// widget author forgetting the first rule does not leak the value.
+	StateSensitive
 )
 
 type AccessibilityNode struct {

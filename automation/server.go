@@ -39,6 +39,8 @@ type Server struct {
 	listener net.Listener
 	path     string
 
+	policy Policy
+
 	mu    sync.RWMutex
 	state Snapshot
 
@@ -47,13 +49,23 @@ type Server struct {
 	wg        sync.WaitGroup
 }
 
+// Option configures a Server.
+type Option func(*Server)
+
+// WithPolicy sets what the server lets leave the process. Without it the
+// server exposes structure only: no input values, no screen text, and no
+// input synthesis.
+func WithPolicy(policy Policy) Option {
+	return func(s *Server) { s.policy = policy }
+}
+
 // Listen creates the socket and starts accepting connections.
 //
 // The socket is created with 0600 permissions, and its directory is expected to
 // be one only the user can write. There is no TCP equivalent on purpose: this
 // interface synthesises input into a live application, and a port would offer
 // that to anything that can reach the host.
-func Listen(socketPath string) (*Server, error) {
+func Listen(socketPath string, opts ...Option) (*Server, error) {
 	if socketPath == "" {
 		return nil, fmt.Errorf("automation: empty socket path")
 	}
@@ -87,6 +99,11 @@ func Listen(socketPath string) (*Server, error) {
 	}
 
 	s := &Server{listener: listener, path: socketPath, done: make(chan struct{})}
+	for _, opt := range opts {
+		if opt != nil {
+			opt(s)
+		}
+	}
 	s.wg.Add(1)
 	go s.accept()
 	return s, nil
@@ -182,14 +199,28 @@ func (s *Server) handle(req Request) Response {
 	state := s.state
 	s.mu.RUnlock()
 
+	// Everything below works on the redacted tree, including selector
+	// resolution. Resolving against the raw tree would turn a withheld value
+	// into an oracle: a client could ask for value="hunter2" and learn the
+	// password from whether anything matched.
+	tree := s.policy.redactTree(state.Tree)
+
 	switch req.Op {
 	case OpHello:
-		return Response{OK: true, Version: Version, Width: state.Width, Height: state.Height}
+		return Response{
+			OK: true, Version: Version, Width: state.Width, Height: state.Height,
+			AllowInput:        s.policy.AllowInput,
+			ExposeScreen:      s.policy.ExposeScreen,
+			ExposeInputValues: s.policy.ExposeInputValues,
+		}
 
 	case OpTree:
-		return Response{OK: true, Nodes: state.Tree}
+		return Response{OK: true, Nodes: tree}
 
 	case OpSnapshot:
+		if !s.policy.ExposeScreen {
+			return Response{Err: "automation: screen snapshots are disabled by policy (Policy.ExposeScreen)"}
+		}
 		return Response{OK: true, Snapshot: state.Screen}
 
 	case OpFocused:
@@ -197,20 +228,20 @@ func (s *Server) handle(req Request) Response {
 
 	case OpFind:
 		if req.Selector.IsEmpty() {
-			return Response{OK: true, Nodes: state.Tree}
+			return Response{OK: true, Nodes: tree}
 		}
-		return Response{OK: true, Nodes: Resolve(state.Tree, req.Selector)}
+		return Response{OK: true, Nodes: Resolve(tree, req.Selector)}
 
 	case OpClick:
-		node, err := ResolveOne(state.Tree, req.Selector)
+		if err := s.checkInput(state); err != nil {
+			return Response{Err: err.Error()}
+		}
+		node, err := ResolveOne(tree, req.Selector)
 		if err != nil {
 			return Response{Err: err.Error()}
 		}
 		if node.Bounds.Width == 0 || node.Bounds.Height == 0 {
 			return Response{Err: fmt.Sprintf("automation: %s has empty bounds and cannot be clicked", req.Selector)}
-		}
-		if state.Injector == nil {
-			return Response{Err: "automation: application accepts no synthetic input"}
 		}
 		// Centre of the node, which is inside it for any non-empty rect.
 		state.Injector(driver.Event{
@@ -224,8 +255,8 @@ func (s *Server) handle(req Request) Response {
 		return Response{OK: true, Nodes: []accessibility.AccessibilityNode{node}}
 
 	case OpKey:
-		if state.Injector == nil {
-			return Response{Err: "automation: application accepts no synthetic input"}
+		if err := s.checkInput(state); err != nil {
+			return Response{Err: err.Error()}
 		}
 		key, err := parseKey(req.Key)
 		if err != nil {
@@ -236,8 +267,8 @@ func (s *Server) handle(req Request) Response {
 		return Response{OK: true}
 
 	case OpText:
-		if state.Injector == nil {
-			return Response{Err: "automation: application accepts no synthetic input"}
+		if err := s.checkInput(state); err != nil {
+			return Response{Err: err.Error()}
 		}
 		for _, r := range req.Text {
 			state.Injector(driver.Event{
@@ -250,6 +281,18 @@ func (s *Server) handle(req Request) Response {
 	default:
 		return Response{Err: fmt.Sprintf("automation: unknown op %q", req.Op)}
 	}
+}
+
+// checkInput refuses input synthesis unless the policy allows it and the
+// application wired an injector.
+func (s *Server) checkInput(state Snapshot) error {
+	if !s.policy.AllowInput {
+		return fmt.Errorf("automation: input synthesis is disabled by policy (Policy.AllowInput)")
+	}
+	if state.Injector == nil {
+		return fmt.Errorf("automation: application accepts no synthetic input")
+	}
+	return nil
 }
 
 // namedKeys maps protocol key names to driver key types. Single characters are

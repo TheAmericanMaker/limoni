@@ -22,10 +22,28 @@ func Wakeup() {
 type AppOption func(*appConfig)
 
 type appConfig struct {
-	catchCtrlC     bool
-	fps            int
-	automationPath string
-	inlineHeight   uint16
+	catchCtrlC       bool
+	fps              int
+	automationPath   string
+	automationPolicy AutomationPolicy
+	inlineHeight     uint16
+}
+
+// AutomationPolicy decides what an application's automation socket lets out.
+// Every field defaults to closed: with the zero value a client can see roles,
+// labels, positions and bounds, and nothing else.
+//
+// It mirrors automation.Policy field for field. It is declared here, in the
+// root package, so that a build without the limoni_debug tag does not import
+// the automation package at all.
+type AutomationPolicy struct {
+	// ExposeInputValues sends the values of text fields. Fields marked Secret
+	// are never sent, whatever this says.
+	ExposeInputValues bool
+	// ExposeScreen allows the snapshot of the rendered grid.
+	ExposeScreen bool
+	// AllowInput permits key, text and click synthesis.
+	AllowInput bool
 }
 
 // WithInline renders the application in place, in a band of the given height,
@@ -48,9 +66,10 @@ func WithInline(height uint16) AppOption {
 // input into the running application, so treat enabling it the way you would
 // treat enabling a debug console: a development and CI facility, not something
 // to ship on by default.
-func WithAutomation(socketPath string) AppOption {
+func WithAutomation(socketPath string, policy AutomationPolicy) AppOption {
 	return func(c *appConfig) {
 		c.automationPath = socketPath
+		c.automationPolicy = policy
 	}
 }
 
@@ -114,7 +133,7 @@ func runLoop(term *Terminal, appFn func(f *Frame, ev *Event) bool, cfg appConfig
 		injected   chan Event
 	)
 	if cfg.automationPath != "" {
-		autoServer, err = automation.Listen(cfg.automationPath)
+		autoServer, err = automation.Listen(cfg.automationPath, automation.WithPolicy(automation.Policy(cfg.automationPolicy)))
 		if err != nil {
 			return err
 		}

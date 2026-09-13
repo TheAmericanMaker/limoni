@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/thebanri/limoni/core/accessibility"
+	"github.com/thebanri/limoni/core/buffer"
 	"github.com/thebanri/limoni/core/cell"
 )
 
@@ -88,5 +89,38 @@ func TestAccessibilityNodeConstructionDoesNotAllocate(t *testing.T) {
 		_ = tabs.AccessibilityNode(bounds, false)
 	}); got != 0 {
 		t.Errorf("building nodes allocated %v times per run, want 0", got)
+	}
+}
+
+// A secret field must not put its characters into the cell buffer, where the
+// screen snapshot, a recording or a terminal scrollback could pick them up.
+func TestSecretTextInputNeverDrawsOrExposesItsValue(t *testing.T) {
+	state := NewTextInputState()
+	state.Text = []rune("hunter2")
+	state.Cursor = len(state.Text)
+	input := TextInput{ID: "pw", State: state, Secret: true}
+
+	buf := buffer.NewBuffer(cell.NewRect(0, 0, 20, 1))
+	input.Draw(cell.NewContext(buf.Area, cell.Style{}), buf)
+	snap := buf.Snapshot()
+	for _, r := range "hunter2" {
+		if strings.ContainsRune(snap, r) {
+			t.Fatalf("secret character %q drawn into the buffer: %q", r, snap)
+		}
+	}
+	if strings.Count(snap, "•") != 7 {
+		t.Errorf("expected 7 mask glyphs, got %q", snap)
+	}
+
+	node := input.AccessibilityNode(buf.Area, true)
+	if node.Value != "" {
+		t.Errorf("secret value exposed on the node: %q", node.Value)
+	}
+	if node.State&accessibility.StateSensitive == 0 {
+		t.Error("secret field not marked StateSensitive")
+	}
+	line := accessibility.Mode{ScreenReader: true}.LineMode([]accessibility.AccessibilityNode{node})
+	if strings.Contains(line, "hunter2") || !strings.Contains(line, "sensitive") {
+		t.Errorf("screen reader line = %q", line)
 	}
 }

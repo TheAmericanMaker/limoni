@@ -59,7 +59,7 @@ func (m Mode) WriteLineMode(w io.Writer, nodes []AccessibilityNode) error {
 // StateNames returns state flags in a stable order so screen-reader output is
 // deterministic across runs and independent of bit layout changes.
 func (s NodeState) StateNames() []string {
-	states := make([]string, 0, 7)
+	states := make([]string, 0, 8)
 	for _, state := range []struct {
 		flag NodeState
 		name string
@@ -71,6 +71,7 @@ func (s NodeState) StateNames() []string {
 		{StateChecked, "checked"},
 		{StateBusy, "busy"},
 		{StateInvalid, "invalid"},
+		{StateSensitive, "sensitive"},
 	} {
 		if s&state.flag != 0 {
 			states = append(states, state.name)
