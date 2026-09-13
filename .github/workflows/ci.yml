@@ -131,7 +131,7 @@ jobs:
       - name: Race Detection
         if: runner.os != 'Windows'
         shell: bash
-        run: go test -race . ./component ./core/engine ./core/terminal ./testkit ./widgets ./layout ./core/accessibility ./core/driver ./compat/bubbletea
+        run: go test -race . ./component ./core/engine ./core/terminal ./testkit ./widgets ./layout ./core/accessibility ./core/driver ./compat/bubbletea ./automation ./cmd/limoni-mcp
 
       # The build tag is only a guarantee if release binaries really do not
       # contain the gateway. Importing automation from an untagged file in the
@@ -145,12 +145,16 @@ jobs:
             echo "FAIL the root package imports automation or session in an untagged build"
             exit 1
           fi
-          go build -o /tmp/release-simple ./examples/simple
-          count=$(go tool nm /tmp/release-simple | grep -cE 'limoni/(automation|session)\.' || true)
-          if [ "$count" != "0" ]; then
-            echo "FAIL release binary contains $count automation or session symbols"
-            exit 1
-          fi
+          # simple never mentions automation; agent_checklist calls
+          # WithAutomation, which is the case the build tag has to hold for.
+          for example in simple agent_checklist; do
+            go build -o "/tmp/release-$example" "./examples/$example"
+            count=$(go tool nm "/tmp/release-$example" | grep -cE 'limoni/(automation|session)\.' || true)
+            if [ "$count" != "0" ]; then
+              echo "FAIL release build of $example contains $count automation or session symbols"
+              exit 1
+            fi
+          done
           echo "ok   release binary contains no automation or session code"
 
       # Clock and randomness reads in a model's Init, Update or View make session

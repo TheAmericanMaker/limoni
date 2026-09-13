@@ -199,6 +199,29 @@ screen, _ := client.Screen() // ağacın ifade edemediği doğrulamalar için ha
 
 Protokol satır ayrımlı JSON, yani hata ayıklarken `socat` kullanılabilir bir istemcidir. Belirsiz bir seçici **hatadır**, yazı tura değil — iki eşleşen düğmeden sessizce ilkini seçen bir test, ikincisi eklendiği anda yanlış sebeple geçer; hangisini kastettiğinizi `Nth` ile söyleyin.
 
+### Bir yapay zekâ ajanıyla sürmek (MCP)
+
+`cmd/limoni-mcp` aynı ağacı [Model Context Protocol](https://modelcontextprotocol.io) konuşan her ajanın önüne koyar — Claude Code, Claude Desktop, Cursor ve diğerleri. Standart kütüphane dışında bağımlılığı olmayan bir köprüdür: bir yanda stdio üzerinden MCP, öbür yanda uygulamanın soketi.
+
+```bash
+go install github.com/thebanri/limoni/cmd/limoni-mcp@latest
+
+# Bunun için yazılmış örnekte deneyin:
+# Bir terminalde — uygulama $XDG_RUNTIME_DIR/limoni-checklist.sock üzerinde dinler:
+go run -tags limoni_debug ./examples/agent_checklist
+# Bir diğerinde:
+claude mcp add limoni -- limoni-mcp -socket "$XDG_RUNTIME_DIR/limoni-checklist.sock"
+```
+
+Ajan sekiz araç alır: `tree`, `find`, `click`, `press_key`, `type_text`, `wait_for`, `screen` ve `status`. Pratikte iki ayrıntı önemli:
+
+- **Girdi araçları, uygulama yeniden çizdikten sonraki ağacı döndürür.** Girdi asenkrondur — soket bir tuşu, yol açtığı kareden önce onaylar — bu yüzden `click` ağacın değişip durulmasını bekler ve onu döndürür. Ajan hiçbir zaman kendi tıklamasından *önceki* ekran üzerinden akıl yürütmez. Hiçbir şey değişmediyse sonuç bunu söyler, anlayabildiğinde de nedenini: alan gizlidir ya da politika girdi değerlerini saklıyordur.
+- **Hatalar açıklamadır.** Belirsiz bir seçici, yanlış yazılmış bir argüman ya da politika reddi, modelin üzerine iş yapabileceği bir metin olarak döner — `label="Remove" matches 2 nodes; set nth to choose one` — protokol hatası olarak değil.
+
+Köprü aşağıdaki sınırların hiçbirini değiştirmez: yalnızca uygulamanın politikasının izin verdiğini yapabilir ve port açmaz. Girdi araçları yıkıcı (destructive) olarak işaretlidir; yan etkiden önce soran bir istemci soracaktır.
+
+Bir denemede Claude Code 2.1.270, yalnızca hedef söylenerek, bir görev ekledi, üçünü işaretledi, bir deploy token'ı yazdı ve 17 araç çağrısında deploy etti. Denemenin kaydındaki hiçbir araç sonucunda token geçmiyor. Bu bir denemedir, benchmark değil.
+
 > [!WARNING]
 > **Bu, çalışan bir sürece kontrol kanalı açar.** Her biri kendi başına kapalı başarısız olan katmanlar hâlinde kuruldu.
 >

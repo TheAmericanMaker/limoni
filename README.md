@@ -231,6 +231,29 @@ screen, _ := client.Screen() // the raw grid, for assertions the tree cannot mak
 
 The protocol is newline-delimited JSON, so `socat` is a usable client when debugging. An ambiguous selector is an **error**, not a coin toss — a test that silently takes the first of two matching buttons passes for the wrong reason as soon as the second one appears; pass `Nth` to say which you meant.
 
+### Driving it from an AI agent (MCP)
+
+`cmd/limoni-mcp` puts the same tree in front of any agent that speaks the [Model Context Protocol](https://modelcontextprotocol.io) — Claude Code, Claude Desktop, Cursor and others. It is a bridge with no dependencies beyond the standard library: MCP over stdio on one side, the application's socket on the other.
+
+```bash
+go install github.com/thebanri/limoni/cmd/limoni-mcp@latest
+
+# Try it on the example built for this:
+# In one terminal — the app listens on $XDG_RUNTIME_DIR/limoni-checklist.sock:
+go run -tags limoni_debug ./examples/agent_checklist
+# In another:
+claude mcp add limoni -- limoni-mcp -socket "$XDG_RUNTIME_DIR/limoni-checklist.sock"
+```
+
+The agent gets eight tools: `tree`, `find`, `click`, `press_key`, `type_text`, `wait_for`, `screen` and `status`. Two details matter in practice:
+
+- **Input tools return the tree after the application redraws.** Input is asynchronous — the socket acknowledges a key before the frame it causes — so `click` waits for the tree to change and settle, and returns that. An agent never reasons about the screen as it was *before* its own click. If nothing changed, the result says so, and says why when it can tell: the field is secret, or the policy hides input values.
+- **Failures are explanations.** An ambiguous selector, a misspelled argument or a policy refusal comes back as text the model can act on — `label="Remove" matches 2 nodes; set nth to choose one` — rather than as a protocol error.
+
+The bridge changes none of the limits below: it can do only what the application's policy allows, and it opens no port. Input tools are annotated as destructive, so a client that asks before side effects will ask.
+
+In one run, Claude Code 2.1.270, told only the goal, added a task, ticked three, typed a deploy token and deployed in 17 tool calls. The run's transcript contains no tool result with the token in it. That is one run, not a benchmark.
+
 > [!WARNING]
 > **This opens a control channel into a running process.** It is built in layers so that each one fails closed on its own.
 >
@@ -660,6 +683,7 @@ Explore runnable demo applications inside the [`examples/`](./examples) director
 | **[`custom_widget`](./examples/custom_widget)** | Developer guide for implementing custom `widgets.Widget` components (Analog Meter / Gauge). | `go run ./examples/custom_widget` |
 | **[`composable`](./examples/composable)** | Declarative Lego-style UI composition with `VStack`, `HStack`, `Border`, and zero-alloc flex solvers. | `go run ./examples/composable` |
 | **[`simple`](./examples/simple)** | Minimal 50-line starting boilerplate with direct rendering and keyboard navigation. | `go run ./examples/simple` |
+| **[`agent_checklist`](./examples/agent_checklist)** | A release checklist built to be driven by an AI agent through `limoni-mcp`, with a secret token field the agent can type into but never read. | `go run -tags limoni_debug ./examples/agent_checklist` |
 | **[`demo`](./examples/demo)** | **Interactive 3D Lemon Model (GLB/ASCII/Braille/Half-Block) & Feature Trailer.** | `go run ./examples/demo` |
 | **[`showcase`](./examples/showcase)** | Full multi-tab suite with matrix rain, forms, 3D models, DevTools HUD (`F12`), and command palette. | `go run ./examples/showcase` |
 | **[`wasm`](./examples/wasm)** | In-browser WebAssembly demo running on xterm.js. | `go run ./examples/wasm` |

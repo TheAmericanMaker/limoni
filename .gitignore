@@ -10,6 +10,7 @@ benchmarks/runners/*/*-runner
 coverage.txt
 coverage.html
 /limoni
+/limoni-mcp
 /ssh_server
 
 # Cargo build output for the Ratatui runner (137 MB after one release build).
