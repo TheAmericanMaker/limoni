@@ -141,3 +141,39 @@ func TestFocusManagerSpatialScopeTrapping(t *testing.T) {
 		t.Fatalf("MoveRight from B inside scope: got %q, want C", manager.Focused())
 	}
 }
+
+// In immediate mode the application handles the event at the top of its draw
+// function, before it renders anything — and the frame has already cleared
+// the focusable list by then. Tab there used to find nothing to move to, so
+// focus navigation silently did nothing in every limoni.Run application.
+// Navigating before this frame's widgets are registered uses last frame's.
+func TestFocusNavigationWorksBeforeTheFrameRegistersWidgets(t *testing.T) {
+	manager := NewFocusManager()
+	frame := func(beforeRender func()) {
+		manager.Clear()
+		if beforeRender != nil {
+			beforeRender()
+		}
+		for i, id := range []string{"name", "list", "token"} {
+			manager.Register(id)
+			manager.RegisterBounds(id, cell.NewRect(0, uint16(i*2), 10, 1))
+		}
+	}
+
+	frame(nil)
+	if manager.Focused() != "name" {
+		t.Fatalf("initial focus = %q, want name", manager.Focused())
+	}
+	frame(manager.Next)
+	if manager.Focused() != "list" {
+		t.Errorf("Next before render = %q, want list", manager.Focused())
+	}
+	frame(manager.Prev)
+	if manager.Focused() != "name" {
+		t.Errorf("Prev before render = %q, want name", manager.Focused())
+	}
+	frame(func() { manager.MoveFocus2D(DirDown) })
+	if manager.Focused() != "list" {
+		t.Errorf("MoveFocus2D before render = %q, want list", manager.Focused())
+	}
+}
