@@ -72,7 +72,27 @@ type (
 	ResizeMsg       = engine.ResizeMsg
 	FocusMsg        = engine.FocusMsg
 	BlurMsg         = engine.BlurMsg
+	TimeMsg         = engine.TimeMsg
 )
+
+// Observer sees every message and frame of a Program; see engine.Observer.
+// session.Recorder implements it.
+type Observer = engine.Observer
+
+// NowCmd delivers the current time as a TimeMsg. A model that needs the clock
+// should ask for it this way rather than calling time.Now inside Update, so
+// that a session recording captures the time it saw and a replay sees the
+// same.
+func NowCmd() Cmd { return engine.NowCmd() }
+
+// WithProgramObserver attaches an observer, such as a session.Recorder, to a
+// Program.
+//
+// Recording is not wired into this package any further than this: a binary
+// only contains the session recorder if the application imports
+// github.com/thebanri/limoni/session itself, which makes recording a decision
+// visible in the application's own imports rather than a flag.
+func WithProgramObserver(observer Observer) ProgramOption { return engine.WithObserver(observer) }
 
 // NewProgram creates a declarative (Elm architecture) application runtime for
 // model. Run it with Program.Run for full control over the terminal, or

@@ -126,7 +126,7 @@ jobs:
         shell: bash
         run: |
           go vet -tags limoni_debug .
-          go test -tags limoni_debug . ./automation/...
+          go test -tags limoni_debug . ./automation/... ./session/...
 
       - name: Race Detection
         if: runner.os != 'Windows'
@@ -141,17 +141,29 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          if go list -deps . | grep -q 'limoni/automation'; then
-            echo "FAIL the root package imports automation in an untagged build"
+          if go list -deps . | grep -qE 'limoni/(automation|session)$'; then
+            echo "FAIL the root package imports automation or session in an untagged build"
             exit 1
           fi
           go build -o /tmp/release-simple ./examples/simple
-          count=$(go tool nm /tmp/release-simple | grep -c 'limoni/automation\.' || true)
+          count=$(go tool nm /tmp/release-simple | grep -cE 'limoni/(automation|session)\.' || true)
           if [ "$count" != "0" ]; then
-            echo "FAIL release binary contains $count automation symbols"
+            echo "FAIL release binary contains $count automation or session symbols"
             exit 1
           fi
-          echo "ok   release binary contains no automation code"
+          echo "ok   release binary contains no automation or session code"
+
+      # Clock and randomness reads in a model's Init, Update or View make session
+      # replay diverge. limonivet is its own module, so x/tools stays out of
+      # Limoni's dependency graph.
+      - name: limonivet
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          set -euo pipefail
+          go -C tools/limonivet test ./...
+          go -C tools/limonivet build -o "$RUNNER_TEMP/limonivet" .
+          "$RUNNER_TEMP/limonivet" ./...
 
       - name: Verify Zero-Allocation Hot Paths
         if: runner.os == 'Linux'

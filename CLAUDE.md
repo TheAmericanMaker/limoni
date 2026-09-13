@@ -142,6 +142,19 @@ while Limoni diffs in truecolor, making byte counts incomparable.
 and a 4.8 MB runner binary all made it in at various points. CI now rejects tracked
 files that are ELF/Mach-O/PE executables, whatever they are named.
 
+**`go get` bumps the `go` directive silently.** Adding `golang.org/x/tools@v0.50.0`
+to `tools/limonivet` rewrote its `go.mod` to `go 1.26.0`, which the Go 1.25 CI
+toolchain cannot resolve under `GOTOOLCHAIN=local`. It is pinned to v0.49.0, the
+newest release that declares `go 1.25.0`. After any `go get`, read the directive.
+Better: verify with a real old toolchain, `GOTOOLCHAIN=go1.25.0 go list -m`, which
+downloads it once.
+
+**Automation and session recording must stay out of release binaries.** The
+automation gateway lives behind `-tags limoni_debug`; the session recorder is only
+linked if an application imports `session`. The root package must import neither in
+an untagged build — CI checks `go list -deps` and the symbol table of a built
+example. An untagged import of either quietly defeats the whole security model.
+
 **`settings.json` once contained a live API key** and is gitignored for that reason.
 Do not re-add it.
 
@@ -180,23 +193,16 @@ Bubble Tea v2 benchmark runner with a documented baseline.
    rendering user content. Needs UAX #29 segmentation plus mode 2027 negotiation,
    and a decision about how `Cell` stores a multi-rune cluster.
 
-4. **Diff bandwidth.** The diff emits cursor jumps and runs. Ultraviolet also uses
-   `ECH`/`REP`/`ICH`/`DCH` and scroll-region optimisation, which is where its SSH
-   bandwidth story comes from. Emitted bytes, not CPU time, govern responsiveness
-   over a network link.
+4. **Missing terminal integration.** No OSC 8 hyperlinks, no OSC 9/777
+   notifications, no mouse shape, no window title, no suspend/resume.
 
-5. **Missing terminal integration.** No OSC 8 hyperlinks, no OSC 9/777
-   notifications, no mouse shape, no window title, no suspend/resume, no inline
-   (non-altscreen) render mode. Inline mode in particular is what tools like `gum`
-   and CI progress renderers are built on.
-
-6. **Remaining widget gaps.** FilePicker, Gauge/LineGauge, StatusBar, SplitPane,
+5. **Remaining widget gaps.** FilePicker, Gauge/LineGauge, StatusBar, SplitPane,
    syntax-highlighted code view, log view, big text, calendar, autocomplete.
 
-7. **Canvas markers.** Ratatui 0.30 added quadrant (2×2) and sextant (2×3) markers
+6. **Canvas markers.** Ratatui 0.30 added quadrant (2×2) and sextant (2×3) markers
    alongside Braille (2×4). Sextants help where Braille fonts are missing.
 
-8. **Diff bandwidth, the rest of it.** `ICH`/`DCH` for line shifts and
+7. **Diff bandwidth, the rest of it.** `ICH`/`DCH` for line shifts and
    scroll-region optimisation are still missing; that is where Ultraviolet's
    remaining bandwidth advantage lives.
 

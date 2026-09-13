@@ -102,7 +102,7 @@ func (m *loginModel) View(f *terminal.Frame) {
 		status = "WRONG " + status
 	}
 	if m.readsTheTime {
-		status = time.Now().Format(time.RFC3339Nano)
+		status = time.Now().Format(time.RFC3339Nano) // limonivet:allow the test proves replay catches this
 	}
 	f.RenderWidget(&widgets.Paragraph{ID: "status", Text: status}, cell.NewRect(0, 6, 30, 1))
 }
