@@ -48,22 +48,10 @@ func (b *Backend) SetSize(w, h uint16) {
 	b.height = h
 }
 
-// Terminal control sequences, identical to the Unix and Windows backends.
-// xterm.js implements all of them, and omitting them here is what left the
-// browser playground with a blinking cursor over the render, no mouse
-// reporting, and auto-wrap corrupting full-width frames.
-//
-//	\x1b[?1049h - alternate screen buffer
-//	\x1b[?25l   - hide cursor
-//	\x1b[?1003h - track all mouse movement and clicks
-//	\x1b[?1006h - SGR mouse extension
-//	\x1b[?1004h - focus in/out reporting
-//	\x1b[?2004h - bracketed paste
-//	\x1b[?7l    - disable auto-wrap
-const (
-	wasmSetupCmds   = "\x1b[?1049h\x1b[?25l\x1b[?1003h\x1b[?1006h\x1b[?1004h\x1b[?2004h\x1b[?7l"
-	wasmRestoreCmds = "\x1b[0m\x1b[?7h\x1b[?2004l\x1b[?1004l\x1b[?1006l\x1b[?1003l\x1b[?25h\x1b[?1049l"
-)
+// The terminal control sequences are the ones every backend sends; see
+// fullScreenSetupCmds. xterm.js implements them, and omitting them is what
+// once left the browser playground with a blinking cursor over the render, no
+// mouse reporting, and auto-wrap corrupting full-width frames.
 
 // Setup initializes WASM JS callbacks and screen setup.
 func (b *Backend) Setup() error {
@@ -115,7 +103,7 @@ func (b *Backend) Setup() error {
 
 	// Written after the callbacks are registered, so the output bridge is in
 	// place by the time the first bytes are emitted.
-	setup := wasmSetupCmds
+	setup := fullScreenSetupCmds()
 	if height := b.Inline(); height > 0 {
 		setup = inlineSetupCmds(height)
 	}
@@ -131,7 +119,7 @@ func (b *Backend) Close() error {
 	default:
 		close(b.done)
 	}
-	restore := wasmRestoreCmds
+	restore := fullScreenRestoreCmds()
 	if height := b.Inline(); height > 0 {
 		restore = inlineRestoreCmds(height)
 	}

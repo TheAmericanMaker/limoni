@@ -73,7 +73,7 @@ func (b *Backend) SetSize(w, h uint16) {
 // Setup terminali Raw / VT100 moduna geçirir ve ekran hazırlık kodlarını gönderir.
 func (b *Backend) Setup() error {
 	if b.portableIO != nil {
-		setupCmds := "\x1b[?1049h\x1b[?25l\x1b[?1003h\x1b[?1006h\x1b[?1004h\x1b[?2004h\x1b[?7l"
+		setupCmds := fullScreenSetupCmds()
 		if height := b.Inline(); height > 0 {
 			setupCmds = inlineSetupCmds(height)
 		}
@@ -87,7 +87,7 @@ func (b *Backend) Setup() error {
 	}
 	b.state = state
 
-	setupCmds := "\x1b[?1049h\x1b[?25l\x1b[?1003h\x1b[?1006h\x1b[?1004h\x1b[?2004h\x1b[?7l"
+	setupCmds := fullScreenSetupCmds()
 	if height := b.Inline(); height > 0 {
 		setupCmds = inlineSetupCmds(height)
 	}
@@ -108,7 +108,7 @@ func (b *Backend) Close() error {
 			close(b.done)
 		}
 
-		restoreCmds := "\x1b[0m\x1b[?7h\x1b[?2004l\x1b[?1004l\x1b[?1006l\x1b[?1003l\x1b[?25h\x1b[?1049l"
+		restoreCmds := fullScreenRestoreCmds()
 		if height := b.Inline(); height > 0 {
 			restoreCmds = inlineRestoreCmds(height)
 		}

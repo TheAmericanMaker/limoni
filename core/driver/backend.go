@@ -101,7 +101,7 @@ func (b *Backend) Setup() error {
 	// Inline mode keeps the normal screen buffer and leaves auto-wrap on: the
 	// frame lives among the user's scrollback rather than replacing it, and a
 	// row that overflows should wrap the way ordinary terminal output does.
-	setupCmds := "\x1b[?1049h\x1b[?25l\x1b[?1003h\x1b[?1006h\x1b[?1004h\x1b[?2004h\x1b[?7l"
+	setupCmds := fullScreenSetupCmds()
 	if height := b.Inline(); height > 0 {
 		setupCmds = inlineSetupCmds(height)
 	}
@@ -147,7 +147,7 @@ func (b *Backend) Close() error {
 			signal.Stop(b.sigWinch)
 		}
 
-		restoreCmds := "\x1b[0m\x1b[?7h\x1b[?2004l\x1b[?1004l\x1b[?1006l\x1b[?1003l\x1b[?25h\x1b[?1049l"
+		restoreCmds := fullScreenRestoreCmds()
 		if height := b.Inline(); height > 0 {
 			// Park the cursor below the frame so the shell prompt lands after
 			// it, and leave what was drawn on screen.

@@ -59,7 +59,7 @@
 | **Düzen Paradigması** | **Bildirimsel Flexbox & Yığın Çözücü** | String dilimleme (`JoinHorizontal/Vertical`) | Cassowary kısıt çözücü | Kısıt çözücü (Constraint solver) |
 | **Fare Etkileşimi** | **Hücresel Koordinat & Z-Index Yönlendirme** | Yok (manuel koordinat hesabı) | SGR fare olayları; dahili hit-testing yok | Manuel koordinat |
 | **Çift Tampon & Diff** | **Mikrosaniye altı diff + Adaptif tam akış** | Yok (tüm string stdout'a dökülür) | Hücre diff + `ECH`/`REP`/`ICH`/`DCH` + kaydırma optimizasyonu | Çift tamponlu diff |
-| **Grapheme Cluster** | Rune seviyesinde genişlik — **cluster desteği henüz yok** | `uniseg` | `uniseg` + Mod 2027 müzakeresi | `unicode-width` |
+| **Grapheme Cluster** | **UAX #29 cluster'ları, Unicode 17.0, resmî 766 kırılım testinin tamamı geçiyor** + Mod 2027 isteği; desteklemeyen terminaller için her cluster'dan sonra imleç yeniden konumlanır | `uniseg` | `uniseg` + Mod 2027 müzakeresi | `unicode-width` |
 | **Yetenek Tespiti** | Yalnızca ortam değişkenleri | Ortam / terminfo | Çalışma anında sorgulama (terminfo'suz) | terminfo / crossterm |
 | **Büyük Veri / Tablolar**| **1M satır sanallaştırma (sürekli kaydırma altında ~2,6 ms/kare)** | Yüksek GC yükü | v1'e göre iyileştirilmiş | Her karede tüm satırları yeniden kurar — `Table` satır iterator'ının sahibidir |
 | **3D & Vektör Grafikleri**| **Dahili 3D (OBJ/STL/PLY/GLB) & Shaders** | Harici eklenti gerekir | Harici eklenti gerekir | Eklenti gerekir |
@@ -348,6 +348,16 @@ orandır. Yukarıdaki komutla yeniden üretilebilir.
 > arkalarında bir profil var. Sıfır-tahsisat garantileri baştan sona korundu.
 
 > [!NOTE]
+> **Tablo grapheme cluster desteğinden önceye ait.** Metni bölütlemenin ASCII
+> dışı karakterlerde bir maliyeti var; düz ASCII bunu atlayan hızlı yoldan
+> geçiyor. Yukarıdaki makinede, değişiklikten önceki commit'e karşı art arda
+> ölçüldü (`-count=3`, medyan): `BenchmarkTextHeavyFrame` +%5 (30,7 → 32,3 µs —
+> metninde satır başına üç sembol var), `BenchmarkDiff_FullChanges` +%2,
+> `BenchmarkHundredLayers` ve `BenchmarkDiff_PartialChanges` değişmedi; hepsi
+> hâlâ sıfır tahsisatta. Tablodaki mutlak değerler yeniden ölçülmedi; satırları
+> değil oranları karşılaştırın.
+
+> [!NOTE]
 > **Şeffaflık ve Mühendislik Dürüstlüğü Garantisi**:
 > Sentetik kısayollar, yapay tampon temizlemeleri veya statik sıfır-offset döngüleri kullanılmaz.
 > - **Diff Kıyaslamaları**: Hücrelerin her karede bizzat değiştiği kalıcı çift tampon üzerinde çalışır; diff motorunu ve ANSI kodlayıcısını uçtan uca çalıştırır.
@@ -386,6 +396,15 @@ Limoni'nin 3D rasterizasyonunu, grafiklerini ve Braille vektör çizimlerini en 
 Limoni eşik tabanlı bir **Adaptif Flush Motoruna (Adaptive Flush Engine)** sahiptir:
 * **Seyrek Diffing (`dirtyRatio < 0.45`):** Yazma, imleç yanıp sönmesi veya sayaç güncellemeleri gibi seyrek durumlarda sadece değişen hücreleri hesaplayıp hassas imleç sıçramaları (`CUP`) gönderir (**`~14.2 µs`**, 0 B/op).
 * **Tam Akış Yenileme (`dirtyRatio >= 0.45`):** 3D model dönüşü veya hızlı kaydırma gibi ekranın %45'inden fazlasının değiştiği durumlarda imleç sıçramaları terk edilir; DEC senkronize güncelleme modu (`\x1b[?2026h`) ve ana konuma dönüş (`\x1b[H`) ile ardışık tam akış gönderilir. Böylece yırtılma ve titreme olmadan **`0 B/op`** hız korunur.
+
+### 4. Emoji, bayraklar ve aksanlı harfler
+Limoni her hücrede bir **grapheme cluster** tutar — kaç kod noktasından oluşursa oluşsun, okuyucunun tek karakter olarak gördüğü şey. `🇹🇷` (iki bölgesel gösterge), `👨‍👩‍👧` (ZWJ ile birleşmiş beş kod noktası), `👍🏽` (emoji + ten rengi) ve `e` + U+0301 olarak yazılmış `é` birer hücre kaplar; emojiler iki sütun genişliğindedir. Rune rune yürümek bayrağı iki harf olarak çiziyor, aileyi altı sütun ölçüyor ve birleşik aksanı düşürüyordu.
+
+* **Kurallar:** bölütleme Unicode 17.0 için UAX #29'u izler ve resmî `GraphemeBreakTest.txt`'nin 766 durumunun tamamını geçer. Bir cluster'ın genişliği en geniş kod noktasınınkidir (East Asian Width, emoji sunumu); VS16 iki sütuna, VS15 bire zorlar.
+* **Saklama:** hücre hâlâ tek bir `rune` tutar. Çok kod noktalı bir cluster paylaşılan bir tabloya bir kez kaydedilir ve hücre ona bir tutamaç saklar; böylece `Cell` 16 bayt kalır ve tek kod noktaları — metnin neredeyse tamamı — tabloya hiç dokunmaz. Tablo yaklaşık bir milyon farklı cluster ile sınırlıdır; sonrasında yeni cluster'lar belleği büyütmek yerine ilk kod noktalarına düşer.
+* **Terminaller:** Limoni mod 2027'yi (`CSI ? 2027 h`) ister; Ghostty, WezTerm, foot ve Contour bunu uygular. Desteklemeyen terminaller imleci kod noktası başına ilerletir ve bir aile emojisini altı sütun çizebilir. Bunun satırın geri kalanını kaydırmasını önlemek için diff her cluster'dan hemen sonra imleci yeniden konumlandırır. Böyle bir terminalde cluster'ın kendisi yine yanlış görünebilir, ama ondan sonraki hiçbir şey yerinden oynamaz.
+* **Kapatmak:** `LIMONI_GRAPHEME=0` (ya da `cell.SetGraphemeClusters(false)`) hücre başına bir kod noktasına döner ve mod 2027 isteğini göndermez.
+* **Henüz dönüştürülmedi:** `Buffer.SetString` ile çizilen ve `cell.StringWidth` ile ölçülen metin cluster'ları tanır. Metni rune sayısına göre kesen ya da yerleştiren widget'lar — `TextInput`, `TextArea`, tablo ve toast kırpması ve diğerleri — kestikleri yerde bir cluster'ı hâlâ bölebilir.
 
 ---
 

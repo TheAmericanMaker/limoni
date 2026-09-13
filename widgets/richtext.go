@@ -240,10 +240,10 @@ func TextFromRichText(text string, baseStyle cell.Style, theme Theme) Text {
 		// Group consecutive characters with the same style into a single Span to keep rendering fast
 		n := len(currentLine.Spans)
 		if n > 0 && currentLine.Spans[n-1].Style == c.Style {
-			currentLine.Spans[n-1].Text += string(c.Content)
+			currentLine.Spans[n-1].Text += cell.ClusterText(c.Content)
 		} else {
 			currentLine.Spans = append(currentLine.Spans, Span{
-				Text:  string(c.Content),
+				Text:  cell.ClusterText(c.Content),
 				Style: c.Style,
 			})
 		}

@@ -58,6 +58,8 @@ By utilizing a **flat 1D cell grid**, **zero-allocation hot-paths**, and an **op
 
 ## 🆕 What's New & Recent Updates
 
+* 🧬 **Grapheme Clusters**:
+  A flag, a family emoji, a skin-toned thumbs-up or an `e` with a combining accent is now one character on screen, not several. Text is segmented by the Unicode 17.0 rules (UAX #29) and checked against the standard's own `GraphemeBreakTest.txt`; widths come from the same Unicode data. See [FAQ §4](#4-emoji-flags-and-accented-letters) for what changed and what did not.
 * 🎛️ **Both Application Models Are Now First-Class**:
   The declarative Elm-architecture runtime is re-exported from the root package — `limoni.NewProgram`, `limoni.RunProgram`, `limoni.Model`, `limoni.Cmd`, `limoni.Msg` — so declarative apps no longer need to import `core/engine` directly. `Program.Run(ctx)` and `RunProgram(ctx, …)` are context-aware and shut down cleanly on cancellation. See [`examples/counter`](examples/counter).
 * 🧱 **Composable Lego-Like Component Architecture (`component` package)**:
@@ -84,7 +86,7 @@ By utilizing a **flat 1D cell grid**, **zero-allocation hot-paths**, and an **op
 | **Layout Paradigm** | **Declarative Flexbox & Stack Solver** | String slicing (`JoinHorizontal/Vertical`) | Cassowary constraint solver | Constraint solver |
 | **Mouse Interaction** | **Spatial Hit-Testing & Z-Index Routing** | None (manual coordinate math) | SGR mouse events; no built-in hit-testing | Manual coordinates |
 | **Double Buffering & Diff** | **Sub-microsecond dirty-cell diff + Adaptive flush** | None (entire strings dumped to stdout) | Cell diff + `ECH`/`REP`/`ICH`/`DCH` + scroll optimization | Double-buffered diff |
-| **Grapheme Clusters** | Rune-level widths — **cluster support not implemented yet** | `uniseg` | `uniseg` + Mode 2027 negotiation | `unicode-width` |
+| **Grapheme Clusters** | **UAX #29 clusters, Unicode 17.0, all 766 official break tests pass** + Mode 2027 request; cursor re-anchored after each cluster for terminals without it | `uniseg` | `uniseg` + Mode 2027 negotiation | `unicode-width` |
 | **Capability Detection** | Environment variables only | Environment / terminfo | Runtime queries (no terminfo) | terminfo / crossterm |
 | **Large Datasets / Tables**| **Virtual paging (1M rows, ~2.6 ms/frame under continuous scroll)** | High GC load on scroll | Improved vs v1 | Rebuilds every row each frame — `Table` owns its row iterator |
 | **3D & Vector Graphics**| **Built-in 3D (OBJ/STL/PLY/GLB) & Gouraud Shaders** | Third-party / custom | Third-party / custom | Addons required |
@@ -583,6 +585,16 @@ one machine. Reproduce with the command above.
 > The zero-allocation guarantees held throughout.
 
 > [!NOTE]
+> **The table predates grapheme clusters.** Segmenting text costs something for
+> non-ASCII characters; plain ASCII takes a fast path that skips it. Measured
+> back to back on the machine above against the commit before the change
+> (`-count=3`, medians): `BenchmarkTextHeavyFrame` +5% (30.7 → 32.3 µs — its text
+> has three symbols per line), `BenchmarkDiff_FullChanges` +2%,
+> `BenchmarkHundredLayers` and `BenchmarkDiff_PartialChanges` unchanged, all
+> still at zero allocations. The absolute figures in the table were not
+> re-measured, so compare the ratios, not the rows.
+
+> [!NOTE]
 > **Transparency & Engineering Integrity Guarantee**:
 > We do not use synthetic shortcuts, artificial buffer clears, or zero-offset static loops.
 > - **Diff Benchmarks**: Run against a persistent double-buffer where cells genuinely mutate every single frame, forcing the full diff algorithm and ANSI encoder to run end-to-end.
@@ -621,6 +633,15 @@ To experience Limoni's 3D software rasterization, charts, and Braille vector gra
 Limoni features a threshold-based **Adaptive Flush Engine**:
 * **Sparse Diffing (`dirtyRatio < 0.45`):** For typing, metric tickers, and cursor blinks, computes minimal dirty cell regions and emits precise cursor jumps (`CUP`), completing in **`~14.2 µs`** with zero heap allocations.
 * **Full-Stream Redraw (`dirtyRatio >= 0.45`):** When rotating 3D meshes, scrolling large tables, or fading tabs, switching to jump diffing would produce thousands of disjoint escape sequences. Limoni automatically switches to synchronized home (`\x1b[H`) full-stream streaming wrapped in DEC synchronized update mode (`\x1b[?2026h`), completely eliminating visual tearing and flicker while preserving **`0 B/op`** zero-allocation efficiency.
+
+### 4. Emoji, flags and accented letters
+Limoni stores one **grapheme cluster** per cell — what a reader sees as one character, however many code points it takes. `🇹🇷` (two regional indicators), `👨‍👩‍👧` (five code points joined by ZWJ), `👍🏽` (emoji + skin tone) and `é` written as `e` + U+0301 each occupy one cell, two columns wide for the emoji. Walking runes used to draw the flag as two letters, measure the family as six columns and drop the combining accent.
+
+* **Rules:** segmentation follows UAX #29 for Unicode 17.0 and passes all 766 cases of the official `GraphemeBreakTest.txt`. A cluster's width is its widest code point (East Asian Width, emoji presentation), with VS16 forcing two columns and VS15 one.
+* **Storage:** a cell still holds one `rune`. A multi-code-point cluster is interned once in a shared table and the cell stores a handle to it, so `Cell` stays 16 bytes and single code points — nearly all text — never touch the table. The table is capped at about a million distinct clusters; past that, new clusters degrade to their first code point instead of growing memory.
+* **Terminals:** Limoni requests mode 2027 (`CSI ? 2027 h`), which Ghostty, WezTerm, foot and Contour implement. Terminals without it advance the cursor per code point and may draw a family emoji six columns wide. To stop that from shifting the rest of the row, the diff re-anchors the cursor right after every cluster. The cluster itself can still look wrong on such a terminal, but nothing after it moves.
+* **Opting out:** `LIMONI_GRAPHEME=0` (or `cell.SetGraphemeClusters(false)`) restores one code point per cell and skips the mode 2027 request.
+* **Not converted yet:** text drawn through `Buffer.SetString` and measured with `cell.StringWidth` is cluster-aware. Widgets that cut or place text by rune count — `TextInput`, `TextArea`, table and toast truncation, among others — can still split a cluster where they truncate.
 
 ---
 

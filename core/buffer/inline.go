@@ -2,7 +2,6 @@ package buffer
 
 import (
 	"strconv"
-	"unicode/utf8"
 
 	"github.com/thebanri/limoni/core/cell"
 )
@@ -71,7 +70,7 @@ func DiffInline(front, back *Buffer, out []byte, opts DiffOptions) ([]byte, erro
 				continue
 			}
 
-			if opts.RepeatChar && !isBlankCell(c) && cell.RuneWidth(c.Content) == 1 {
+			if opts.RepeatChar && !isBlankCell(c) && !cell.IsCluster(c.Content) && cell.RuneWidth(c.Content) == 1 {
 				run := uint16(1)
 				for nx := x + 1; nx <= uint16(lastPainted); nx++ {
 					if front.Content[rowOffset+int(nx)] != *c {
@@ -83,7 +82,7 @@ func DiffInline(front, back *Buffer, out []byte, opts DiffOptions) ([]byte, erro
 					if c.Style != currentStyle {
 						out, currentStyle = appendStyle(out, currentStyle, c.Style, opts.TrueColor, opts.Colors256, front.StyleCache)
 					}
-					out = utf8.AppendRune(out, c.Content)
+					out = cell.AppendContent(out, c.Content)
 					out = append(out, "\x1b["...)
 					out = strconv.AppendInt(out, int64(run-1), 10)
 					out = append(out, 'b')
@@ -98,7 +97,10 @@ func DiffInline(front, back *Buffer, out []byte, opts DiffOptions) ([]byte, erro
 			if isBlankCell(c) {
 				out = append(out, ' ')
 			} else {
-				out = utf8.AppendRune(out, c.Content)
+				out = cell.AppendContent(out, c.Content)
+				if cell.IsCluster(c.Content) {
+					out = appendClusterResync(out, c.Content, x, width)
+				}
 			}
 		}
 

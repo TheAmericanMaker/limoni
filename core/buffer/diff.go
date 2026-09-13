@@ -3,7 +3,6 @@ package buffer
 import (
 	"bytes"
 	"strconv"
-	"unicode/utf8"
 
 	"github.com/thebanri/limoni/core/cell"
 )
@@ -245,14 +244,14 @@ func diffSparse(front, back *Buffer, out []byte, opts DiffOptions) ([]byte, erro
 					x += run - 1
 					continue
 
-				case opts.RepeatChar && !isBlank && glyphWidth == 1 && run >= minRepeatRun:
+				case opts.RepeatChar && !isBlank && !cell.IsCluster(frontCell.Content) && glyphWidth == 1 && run >= minRepeatRun:
 					if cursorX != x || cursorY != y {
 						out = appendCursor(out, x, y)
 					}
 					if frontCell.Style != currentStyle {
 						out, currentStyle = appendStyle(out, currentStyle, frontCell.Style, trueColor, colors256, front.StyleCache)
 					}
-					out = utf8.AppendRune(out, frontCell.Content)
+					out = cell.AppendContent(out, frontCell.Content)
 					out = append(out, "\x1b["...)
 					out = strconv.AppendInt(out, int64(run-1), 10)
 					out = append(out, 'b')
@@ -282,7 +281,7 @@ func diffSparse(front, back *Buffer, out []byte, opts DiffOptions) ([]byte, erro
 			if frontCell.Content == ' ' || frontCell.Content == 0 || frontCell.Content < 32 || frontCell.Content == 0x7F {
 				out = append(out, ' ')
 			} else {
-				out = utf8.AppendRune(out, frontCell.Content)
+				out = cell.AppendContent(out, frontCell.Content)
 				w = cell.RuneWidth(frontCell.Content)
 				if w <= 0 {
 					w = 1
@@ -290,7 +289,10 @@ func diffSparse(front, back *Buffer, out []byte, opts DiffOptions) ([]byte, erro
 			}
 
 			cursorX += uint16(w)
-			if cursorX >= width {
+			if cursorX >= width || cell.IsCluster(frontCell.Content) {
+				// A terminal without mode 2027 may advance by a different
+				// amount for a cluster, so its cursor position is unknown
+				// and the next write addresses its cell explicitly.
 				cursorX = 9999
 				cursorY = 9999
 			}
@@ -422,7 +424,7 @@ func diffFullStream(front, back *Buffer, out []byte, opts DiffOptions) ([]byte, 
 			// Repeat a run of one glyph. REP advances the cursor exactly as
 			// writing the glyph that many times would, so the sequential
 			// stream stays aligned.
-			if opts.RepeatChar && !isBlankCell(frontCell) && cell.RuneWidth(frontCell.Content) == 1 {
+			if opts.RepeatChar && !isBlankCell(frontCell) && !cell.IsCluster(frontCell.Content) && cell.RuneWidth(frontCell.Content) == 1 {
 				run := uint16(1)
 				for nx := x + 1; nx < width; nx++ {
 					if front.Content[rowOffset+int(nx)] != *frontCell {
@@ -434,7 +436,7 @@ func diffFullStream(front, back *Buffer, out []byte, opts DiffOptions) ([]byte, 
 					if frontCell.Style != currentStyle {
 						out, currentStyle = appendStyle(out, currentStyle, frontCell.Style, trueColor, colors256, front.StyleCache)
 					}
-					out = utf8.AppendRune(out, frontCell.Content)
+					out = cell.AppendContent(out, frontCell.Content)
 					out = append(out, "\x1b["...)
 					out = strconv.AppendInt(out, int64(run-1), 10)
 					out = append(out, 'b')
@@ -452,7 +454,10 @@ func diffFullStream(front, back *Buffer, out []byte, opts DiffOptions) ([]byte, 
 			if isBlankCell(frontCell) {
 				out = append(out, ' ')
 			} else {
-				out = utf8.AppendRune(out, frontCell.Content)
+				out = cell.AppendContent(out, frontCell.Content)
+				if cell.IsCluster(frontCell.Content) {
+					out = appendClusterResync(out, frontCell.Content, x, width)
+				}
 			}
 		}
 	}
@@ -486,6 +491,25 @@ func AppendCursor(out []byte, x, y uint16) []byte {
 }
 
 // appendCursor is an internal alias for AppendCursor.
+// appendClusterResync moves the cursor to the column after a cluster just
+// written at x.
+//
+// Terminals that implement mode 2027 advance by the cluster's width, as the
+// buffer does. Many do not: they advance per code point, so a family emoji
+// moves the cursor six columns and a flag four, and in a sequential stream
+// every later cell on the row would land shifted. CHA names the column
+// outright, which confines the disagreement to the cluster itself. It costs a
+// few bytes per cluster and nothing for text without them.
+func appendClusterResync(out []byte, content rune, x, width uint16) []byte {
+	next := x + uint16(cell.RuneWidth(content))
+	if next >= width {
+		return out // The row ends here; the next row starts with \r.
+	}
+	out = append(out, "\x1b["...)
+	out = strconv.AppendInt(out, int64(next)+1, 10)
+	return append(out, 'G')
+}
+
 func appendCursor(out []byte, x, y uint16) []byte {
 	return AppendCursor(out, x, y)
 }
