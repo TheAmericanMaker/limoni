@@ -35,7 +35,8 @@ func TestTheMixerPansAndPlays(t *testing.T) {
 	m.setVolume(1)
 	m.synth()
 	go m.run()
-	defer close(m.done)
+	defer m.close()
+	defer r.Close()
 
 	m.play(sfxClear, 1, -1) // hard left
 	var left, right float64
@@ -73,5 +74,40 @@ func TestPlayNeverBlocks(t *testing.T) {
 	case <-done:
 	case <-time.After(time.Second):
 		t.Fatal("play blocked on a full queue")
+	}
+}
+
+// Native output has a pipe but no child process. Closing it must release a
+// blocked PCM write and run the output cleanup exactly once.
+func TestNativeMixerCloseReleasesOutput(t *testing.T) {
+	r, w := io.Pipe()
+	defer r.Close()
+	cleaned := 0
+	m := &mixer{w: w, done: make(chan struct{}), cleanup: func() {
+		cleaned++
+		_ = r.Close()
+	}}
+	written := make(chan error, 1)
+	go func() {
+		_, err := w.Write([]byte{0, 0, 0, 0})
+		written <- err
+	}()
+	m.close()
+	m.close()
+	select {
+	case err := <-written:
+		if err != io.ErrClosedPipe {
+			t.Fatalf("closed native stream returned %v", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("closing native audio left a PCM write blocked")
+	}
+	if cleaned != 1 {
+		t.Fatalf("native cleanup called %d times", cleaned)
+	}
+	select {
+	case <-m.done:
+	default:
+		t.Fatal("mixer was not told to stop")
 	}
 }

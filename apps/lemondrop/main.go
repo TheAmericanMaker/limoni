@@ -84,7 +84,7 @@ func main() {
 	if mix != nil {
 		mix.close()
 	} else if !*mute {
-		fmt.Fprintln(os.Stderr, "lemondrop: no sound — install pw-play, pacat, aplay or sox to hear it")
+		fmt.Fprintln(os.Stderr, "lemondrop: no audio output available (on Linux, install pw-play, pacat, aplay or sox)")
 	}
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)

@@ -99,9 +99,10 @@ turning lemon to about 150 bytes a frame on the wire.
 Every sound is synthesised when the game starts, as in Castle Lemonstein, whose
 mixer this is: moving and turning, a block landing and giving way, a drop,
 the hiss of sand running (louder the more of it runs), a clear, a chain, a
-new level, and the end. It is streamed to `pw-play`, `pacat`, `aplay` or
-`sox`, whichever is installed, and in a browser to Web Audio. Without any of
-them the game is silent and says so when it quits.
+new level, and the end. On macOS and Windows it uses native system audio,
+with no extra player to install. On Linux it streams to `pw-play`, `pacat`, `aplay` or `sox`,
+whichever is installed; browsers use Web Audio. If no audio output can be
+started, the game is silent and says so when it quits.
 
 ## Performance
 
