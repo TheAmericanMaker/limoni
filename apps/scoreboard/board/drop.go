@@ -38,6 +38,9 @@ const (
 
 	// DropBody is how large a run may be: a long game sends a clear list.
 	DropBody = 64 << 10
+
+	// DropShown is the number of runs returned by Lemon Drop's leaderboard.
+	DropShown = 20
 )
 
 // DropRun is what the game sends when a run of Lemon Drop ends.

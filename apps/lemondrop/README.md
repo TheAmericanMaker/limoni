@@ -54,8 +54,13 @@ piece a block.
 
 ## Leaderboard
 
+The left panel shows the top 20 runs, including while entering a name or
+playing. Scroll over it with the mouse wheel, or use `Page Up` / `Page Down`.
+In narrow terminals the leaderboard appears on the title and game-over
+screens instead.
+
 The first time, the game asks for a name. Every run that ends goes on two
-boards: the game's own best ten, kept with the name in
+boards: the game's own best twenty, kept with the name in
 `limoni/lemondrop.json` under your configuration directory (or in the
 browser's storage), and the world's, on the same server as Castle Lemonstein's
 ([apps/scoreboard](../scoreboard), at `/drop/scores`). The title and the end

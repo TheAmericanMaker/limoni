@@ -241,7 +241,7 @@ func (h *dropHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case h.store == nil:
 		h.fail(w, "serving Lemon Drop", errors.New("the store keeps no Lemon Drop runs"))
 	case r.Method == http.MethodGet:
-		top, err := h.store.TopDrop(r.Context(), Shown)
+		top, err := h.store.TopDrop(r.Context(), DropShown)
 		if err != nil {
 			h.fail(w, "reading Lemon Drop's board", err)
 			return
@@ -282,7 +282,7 @@ func (h *dropHandler) submit(w http.ResponseWriter, r *http.Request) {
 		h.fail(w, "adding the run", err)
 		return
 	}
-	top, err := h.store.TopDrop(r.Context(), Shown)
+	top, err := h.store.TopDrop(r.Context(), DropShown)
 	if err != nil {
 		h.fail(w, "reading Lemon Drop's board", err)
 		return

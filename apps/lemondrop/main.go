@@ -107,6 +107,15 @@ func (g *game) key(k limoni.KeyEvent) {
 	rn := k.Type == limoni.KeyRune
 	press := !k.Release && !k.Repeat
 
+	if !k.Release && (k.Type == limoni.KeyPageUp || k.Type == limoni.KeyPageDown) {
+		delta := max(1, g.boardView.rows)
+		if k.Type == limoni.KeyPageUp {
+			delta = -delta
+		}
+		g.scrollBoard(delta)
+		return
+	}
+
 	if g.phase == phName {
 		switch {
 		case k.Type == limoni.KeyEsc:
@@ -229,6 +238,17 @@ func (g *game) setPaused(on bool) {
 // mouse handles a click: on the pause button, it pauses the run or lets it
 // go on.
 func (g *game) mouse(m limoni.MouseEvent) {
+	v := g.boardView
+	if v.w > 0 && int(m.X) >= v.x && int(m.X) < v.x+v.w && int(m.Y) >= v.y && int(m.Y) < v.y+v.h {
+		switch m.Button {
+		case limoni.MouseScrollUp:
+			g.scrollBoard(-1)
+			return
+		case limoni.MouseScrollDown:
+			g.scrollBoard(1)
+			return
+		}
+	}
 	if m.Button != limoni.MouseLeft || m.Drag {
 		return
 	}

@@ -67,6 +67,22 @@ func TestDropRunsAreScoredByTheServerAndRanked(t *testing.T) {
 	})
 }
 
+func TestDropReturnsTopTwenty(t *testing.T) {
+	forEachStore(t, func(t *testing.T, open func() Store) {
+		f := newFixture(t, open(), epoch)
+		for i := 1; i <= 25; i++ {
+			code, a := f.drop("POST", run(fmt.Sprintf("P%02d", i), 60, 10, i))
+			if code != 200 || len(a.Board) != min(i, 20) {
+				t.Fatalf("POST %d: status %d, %d scores", i, code, len(a.Board))
+			}
+		}
+		code, a := f.drop("GET", "")
+		if code != 200 || len(a.Board) != 20 || a.Board[0].Name != "P25" || a.Board[19].Name != "P06" {
+			t.Fatalf("GET: %d %+v", code, a)
+		}
+	})
+}
+
 func TestDropRunsTheGameCannotProduceAreRefused(t *testing.T) {
 	m, _ := OpenMem("")
 	f := newFixture(t, m, epoch)

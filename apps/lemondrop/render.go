@@ -15,8 +15,9 @@ import (
 // nothing else, and the diff sends only the cells that changed.
 
 const (
-	panelW = 20 // the side panel's width in cells
-	gap    = 2  // cells between the board and the panel
+	leaderW = 28 // the leaderboard to the left of the playing field
+	panelW  = 20 // the side panel's width in cells
+	gap     = 2  // cells between the board and the panel
 )
 
 type rgb struct{ r, g, b float64 }
@@ -285,7 +286,9 @@ func (g *game) render(b *buffer.Buffer) {
 	cv := canvas{b: b, w: W, h: H}
 	cv.fill(0, 0, W, H, style(textCol, screenBg))
 
-	fit := fitSize(W, H)
+	g.boardView.w = 0
+	g.pauseBtn.w = 0
+	fit := gameFitSize(W, H)
 	switch {
 	case fit == 0:
 		// Not even the smallest board fits: say so, and hold a run.
@@ -314,7 +317,14 @@ func (g *game) render(b *buffer.Buffer) {
 
 	rowsOnScreen := g.gh / 2
 	total := g.gw + 2 + gap + panelW
+	hasLeader := W >= leaderW+gap+cols*minB+2+gap+panelW
+	if hasLeader {
+		total += leaderW + gap
+	}
 	left := (W - total) / 2
+	if hasLeader {
+		left += leaderW + gap
+	}
 	top := (H - rowsOnScreen - 2) / 2
 	g.bx, g.by = left+1, top+1
 	g.panelX, g.topY = left+g.gw+2+gap, top
@@ -322,6 +332,9 @@ func (g *game) render(b *buffer.Buffer) {
 	g.drawBorder(cv, left, top, g.gw+2, rowsOnScreen+2)
 	g.drawBoard(cv)
 	g.drawPanel(cv)
+	if hasLeader {
+		g.drawLeaderboard(cv, left-leaderW-gap, top, rowsOnScreen+2)
+	}
 	g.drawOverlay(cv)
 }
 
@@ -519,7 +532,7 @@ func (g *game) drawNext(cv canvas, x0, y0 int) {
 }
 
 // drawOverlay puts the title, the name entry, the pause and the end over
-// the board. The title and the end carry a board of the best ten: the
+// the board. On narrow screens the title and end carry the leaderboard: the
 // world's when the shared leaderboard answers, the game's own otherwise,
 // with as many rows and columns as the board's size leaves room for.
 func (g *game) drawOverlay(cv canvas) {
@@ -528,9 +541,9 @@ func (g *game) drawOverlay(cv canvas) {
 	case g.phase == phName:
 		o.lines = 6
 	case g.phase == phTitle:
-		o.lines, o.board = 7, true
+		o.lines, o.board = 7, g.boardView.w == 0
 	case g.phase == phOver && g.now-g.overAt > 0.6:
-		o.lines, o.board = 6, true
+		o.lines, o.board = 6, g.boardView.w == 0
 	case g.paused:
 		o.lines = 5
 	default:
@@ -559,7 +572,9 @@ func (g *game) drawOverlay(cv canvas) {
 		o.text(e, g.name, o.value)
 		o.y++
 		o.skip()
-		o.drawBoard()
+		if o.board {
+			o.drawBoard()
+		}
 		o.skip()
 		o.keys("ENTER", "play", "N", "name")
 		o.keys("Q", "quit", "", "")
@@ -570,7 +585,9 @@ func (g *game) drawOverlay(cv canvas) {
 		g.drawRank(o, e+2)
 		o.y++
 		o.skip()
-		o.drawBoard()
+		if o.board {
+			o.drawBoard()
+		}
 		o.skip()
 		o.keys("R", "play again", "Q", "quit")
 	default:
@@ -690,7 +707,12 @@ func (o *overlay) drawBoard() {
 		o.y++
 		return
 	}
-	for i, e := range entries[:o.rows] {
+	g.boardScroll = min(g.boardScroll, max(0, len(entries)-o.rows))
+	if g.boardView.w == 0 {
+		g.boardView.x, g.boardView.y, g.boardView.w, g.boardView.h, g.boardView.rows = o.x, o.y, o.w, o.rows, o.rows
+	}
+	for row, e := range entries[g.boardScroll : g.boardScroll+o.rows] {
+		i := row + g.boardScroll
 		st := o.value
 		if i+1 == mark {
 			st = o.hi
@@ -733,4 +755,54 @@ func boolInt(b bool) int {
 // centre writes s centred on column cx.
 func centre(cv canvas, cx, y int, s string, st cell.Style) {
 	cv.text(cx-textWidth(s)/2, y, s, st)
+}
+
+// gameFitSize reserves the left panel when the smallest three-column layout fits.
+func gameFitSize(w, h int) int {
+	if w >= leaderW+gap+cols*minB+2+gap+panelW {
+		w -= leaderW + gap
+	}
+	return fitSize(w, h)
+}
+
+func (g *game) scrollBoard(delta int) {
+	entries, _, _ := g.shownBoard()
+	if g.boardView.w == 0 {
+		return
+	}
+	g.boardScroll = max(0, min(g.boardScroll+delta, max(0, len(entries)-g.boardView.rows)))
+}
+
+// drawLeaderboard stays visible while naming, playing and pausing.
+func (g *game) drawLeaderboard(cv canvas, x, y, h int) {
+	g.drawBorder(cv, x, y, leaderW, h)
+	label, value, hi := style(labelCol, screenBg), style(textCol, screenBg), style(accent, screenBg)
+	cv.text(x+2, y+1, "LEADERBOARD / TOP 20", hi)
+	entries, _, _ := g.shownBoard()
+	rows := min(10, h-7)
+	g.boardView.x, g.boardView.y, g.boardView.w, g.boardView.h, g.boardView.rows = x, y, leaderW, h, rows
+	g.boardScroll = min(g.boardScroll, max(0, len(entries)-rows))
+	o := overlay{cv: cv, g: g, x: x + 2, y: y + 3, w: leaderW - 4, rows: min(rows, len(entries)), label: label, value: value, hi: hi, accent: hi}
+	o.drawBoard()
+	if len(entries) > 0 {
+		end := min(len(entries), g.boardScroll+rows)
+		cx := cv.number(x+2, y+h-3, g.boardScroll+1, label)
+		cx = cv.text(cx, y+h-3, "-", label)
+		cx = cv.number(cx, y+h-3, end, label)
+		cx = cv.text(cx, y+h-3, " / ", label)
+		cv.number(cx, y+h-3, len(entries), label)
+	}
+	cv.text(x+2, y+h-2, "Wheel / PgUp PgDn", label)
+	if len(entries) > rows {
+		track := h - 7
+		thumb := max(1, track*rows/len(entries))
+		pos := (track - thumb) * g.boardScroll / (len(entries) - rows)
+		for i := 0; i < track; i++ {
+			ch, st := '│', label
+			if i >= pos && i < pos+thumb {
+				ch, st = '┃', hi
+			}
+			cv.set(x+leaderW-2, y+4+i, ch, st)
+		}
+	}
 }

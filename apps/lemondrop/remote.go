@@ -48,7 +48,7 @@ func newRemote(url string) *remote {
 	return &remote{url: url, answers: make(chan remoteAnswer, 4)}
 }
 
-// fetch asks for the best ten.
+// fetch asks for the best twenty.
 func (r *remote) fetch() {
 	go func() {
 		body, err := httpDo("GET", r.url+"/drop/scores", nil)

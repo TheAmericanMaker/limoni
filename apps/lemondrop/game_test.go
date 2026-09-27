@@ -824,7 +824,7 @@ func TestTheLemonTurns(t *testing.T) {
 func fillBoard(b []scoreEntry, n *int) {
 	names := [...]string{"Ada", "Bora", "Cem", "Deniz", "Ece", "Figen", "Gül", "Hakan", "Irmak", "Jale"}
 	for i := range b {
-		b[i] = scoreEntry{Name: names[i], Score: 10000 - i*900, Clears: 40 - i, Level: 11 - i, Secs: 300}
+		b[i] = scoreEntry{Name: names[i%len(names)], Score: 20000 - i*900, Clears: 40 - i, Level: 11 - i/2, Secs: 300}
 	}
 	*n = len(b)
 }

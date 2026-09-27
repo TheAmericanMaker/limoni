@@ -170,6 +170,8 @@ type game struct {
 	worldState   int
 	worldRank    int // the last run's place on the world's: -1 sending
 	remote       *remote
+	boardScroll  int
+	boardView    struct{ x, y, w, h, rows int }
 
 	// What the run did, for the leaderboard to score again.
 	pieces   int
@@ -288,7 +290,7 @@ func fitSize(w, h int) int {
 
 // start begins a run on an empty board.
 func (g *game) start() {
-	b := fitSize(g.lastW, g.lastH)
+	b := gameFitSize(g.lastW, g.lastH)
 	if b == 0 {
 		b = minB
 	}
@@ -509,6 +511,7 @@ func fallSpeed(level int) float64 {
 // update advances the game by a frame's worth of time, in fixed steps.
 func (g *game) update(elapsed float64) {
 	if g.paused {
+		g.pollRemote()
 		return
 	}
 	g.acc += min(elapsed, 0.1)

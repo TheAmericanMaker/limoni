@@ -18,7 +18,7 @@ import (
 
 const (
 	nameMax   = 12 // characters in a player's name
-	boardSize = 10 // runs on a board
+	boardSize = 20 // runs on a board
 	maxLog    = 5000
 )
 
