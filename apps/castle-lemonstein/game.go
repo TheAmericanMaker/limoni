@@ -58,10 +58,10 @@ const (
 	lemonHeal  = 8
 
 	// The squirter holds eight squirts. It never runs out of juice, but
-	// refilling it takes R and a second and a half with no squirting.
+	// refilling it takes R and 0.8 seconds with no squirting.
 	fireDelay  = 0.3
 	magSize    = 8
-	reloadTime = 1.5
+	reloadTime = 0.8
 
 	boardSize = 10 // scores kept on the leaderboard
 	nameMax   = 12 // characters in a player's name
