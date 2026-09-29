@@ -9,12 +9,22 @@ a patch bump (`v0.x.y`) does not.
 ## [Unreleased]
 
 ### Added
+- README: a backdrop-shell section with a recording (`assets/backdrop-shell.gif`,
+  1.2 MB, in the assets module, so no importer downloads it).
 - `backdrop-shell opacity 0.3` (or `+0.1`, `-0.1`), and settings changes in
   general, apply at once to every open terminal: each running wrapper
   listens on its own socket in the user's runtime directory and reads the
   settings again when asked.
 
 ### Fixed
+- `backdrop-shell`: box drawing that a program repeated with REP (`CSI n
+  b`, which kitty's, Alacritty's and xterm's terminfo all offer) came out
+  as a row of the last ASCII letter: the emulator repeats only one-byte
+  characters. REP is now written out before it reaches the emulator.
+- `backdrop-shell`: a runtime directory deeper than a socket path allows
+  left the wrapper without its control socket, silently, so settings
+  changes stopped reaching open terminals. It falls back to the temporary
+  directory. Paths it prints under the home directory are written with ~.
 - `backdrop-shell`: copying copied the background too — the terminal's
   selection takes whatever is in the cells, stars and art included. The
   wrapper now selects with the mouse itself (drag, double-click for a word,

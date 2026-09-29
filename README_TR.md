@@ -201,6 +201,25 @@ zest -demo 1000000        # ya da: zest app.log, kubectl logs -f pod | zest
 
 Ya da [tarayıcıda dene](https://thebanri.github.io/limoni/): "Logs · zest" sekmesi.
 
+### Kabuğun için: backdrop-shell
+
+<p align="center"><img src="assets/backdrop-shell.gif" alt="backdrop-shell: hareketli bir auroranın önünde fish istemi; ls dosyaları önünde listeliyor, backdrop-shell opacity 0.9 sahneyi anında belirginleştiriyor, backdrop-shell enable -scene synthwave açık terminali neon bir ızgaranın üstünde çizgili bir gün batımına geçiriyor" width="100%" /></p>
+
+[**backdrop-shell**](apps/backdrop-shell) kabuğunun arkasına, hangi terminal olursa olsun, hareketli bir
+sahne koyar: kuzey ışıkları, gece şehri, yıldız alanı, synthwave gün batımı, bir resim ya da göz kırpan,
+kayan kendi ASCII art'ın. Öndeki yazı net kalır, seçip kopyaladığında yalnızca kabuğun yazdığı gelir,
+pencere daralınca hiçbir satır kaybolmaz; opaklığı ya da sahneyi değiştirdiğinde açık olan her terminal
+anında değişir. Bir çekirdeğin yaklaşık binde beşini harcar, pencere arka plandayken hiç harcamaz.
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/thebanri/limoni/main/apps/backdrop-shell/install.sh | sh
+backdrop-shell opacity 0.3                # daha sönük, açık her terminalde
+backdrop-shell enable -scene synthwave    # ya da -image duvar.jpg, ya da -art benim.txt
+```
+
+Kendi art'ını çizmek ve canlandırmak: [docs/tr/backdrop-art.md](docs/tr/backdrop-art.md). Aynı sahneler
+`limoni.WithBackdrop(backdrop.Aurora())` ile her Limoni uygulamasının arkasına da konabilir.
+
 ### Bir de oyun: Castle Lemonstein
 
 <p align="center"><img src="assets/castle-lemonstein.png" alt="Castle Lemonstein: ay ışığında kale, altın renkli başlık ve bordo sancaklarla açılış ekranı" width="100%" /></p>

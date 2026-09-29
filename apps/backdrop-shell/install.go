@@ -258,6 +258,21 @@ func (h hook) remove() (bool, error) {
 	return true, writeInPlace(h.file, rest)
 }
 
+// tilde writes a path under the home directory with ~, as people type it.
+func tilde(p string) string {
+	home, err := os.UserHomeDir()
+	if err != nil || home == "" || home == "/" {
+		return p
+	}
+	if p == home {
+		return "~"
+	}
+	if strings.HasPrefix(p, home+string(filepath.Separator)) {
+		return "~" + p[len(home):]
+	}
+	return p
+}
+
 // expandHome turns a leading ~ into the home directory, for a path given in
 // a way the shell did not expand (-image=~/x.jpg).
 func expandHome(p string) string {
@@ -383,13 +398,13 @@ func cmdEnable(args []string) error {
 		if err := h.install(bin); err != nil {
 			return fmt.Errorf("%s: %w", h.file, err)
 		}
-		fmt.Printf("  on   %-4s  %s\n", h.shell, h.file)
+		fmt.Printf("  on   %-4s  %s\n", h.shell, tilde(h.file))
 		done++
 	}
 	if done == 0 {
 		return errors.New("no shell to hook: none of fish, bash, zsh found (or named with -shells)")
 	}
-	fmt.Printf("Settings: %s\n", settingsPath())
+	fmt.Printf("Settings: %s\n", tilde(settingsPath()))
 	reportReload()
 	fmt.Println("\"backdrop-shell disable\" turns it off.")
 	return nil
@@ -403,7 +418,7 @@ func cmdDisable(hint bool) error {
 			return fmt.Errorf("%s: %w", h.file, err)
 		}
 		if removed {
-			fmt.Printf("  off  %-4s  %s\n", h.shell, h.file)
+			fmt.Printf("  off  %-4s  %s\n", h.shell, tilde(h.file))
 			removedAny = true
 		}
 	}
@@ -421,7 +436,7 @@ func cmdStatus() error {
 	if err != nil {
 		return err
 	}
-	fmt.Printf("binary    %s\nsettings  %s\n", bin, settingsPath())
+	fmt.Printf("binary    %s\nsettings  %s\n", tilde(bin), tilde(settingsPath()))
 	fmt.Printf("          scene=%s opacity=%g fps=%g still=%t\n", s.Scene, s.Opacity, s.FPS, s.Still)
 	if s.Art != "" {
 		fmt.Printf("          art=%s\n", s.Art)
@@ -439,7 +454,7 @@ func cmdStatus() error {
 		if h.installed() {
 			state = "on"
 		}
-		fmt.Printf("%-9s %-3s  %s\n", h.shell, state, h.file)
+		fmt.Printf("%-9s %-3s  %s\n", h.shell, state, tilde(h.file))
 	}
 	if nested() {
 		fmt.Println("This shell is running inside backdrop-shell.")
@@ -453,7 +468,7 @@ func cmdReset() error {
 	if err := defaultSettings().save(settingsPath()); err != nil {
 		return err
 	}
-	fmt.Printf("Settings are back to the defaults (%s).\n", settingsPath())
+	fmt.Printf("Settings are back to the defaults (%s).\n", tilde(settingsPath()))
 	reportReload()
 	return nil
 }
@@ -464,7 +479,7 @@ func cmdUninstall() error {
 	}
 	path := settingsPath()
 	if err := os.Remove(path); err == nil {
-		fmt.Printf("  removed %s\n", path)
+		fmt.Printf("  removed %s\n", tilde(path))
 		_ = os.Remove(filepath.Dir(path)) // only if empty
 	}
 	bin, err := selfPath()
@@ -474,6 +489,6 @@ func cmdUninstall() error {
 	if err := os.Remove(bin); err != nil {
 		return fmt.Errorf("removing %s: %w", bin, err)
 	}
-	fmt.Printf("  removed %s\nbackdrop-shell is uninstalled. Terminals already open keep it until closed.\n", bin)
+	fmt.Printf("  removed %s\nbackdrop-shell is uninstalled. Terminals already open keep it until closed.\n", tilde(bin))
 	return nil
 }

@@ -220,3 +220,16 @@ func TestCopyGoesThroughTheSystemClipboard(t *testing.T) {
 		t.Fatalf("over SSH copied %q", got)
 	}
 }
+
+// A socket path longer than the kernel allows made the wrapper give up its
+// socket without a word, so settings changes stopped reaching it.
+func TestControlSocketFitsWhateverTheRuntimeDirectory(t *testing.T) {
+	t.Setenv("XDG_RUNTIME_DIR", "/"+strings.Repeat("deep/", 30))
+	if p := controlDir() + "/4194304.sock"; len(p) > 104 {
+		t.Fatalf("socket path %d bytes: %s", len(p), p)
+	}
+	t.Setenv("XDG_RUNTIME_DIR", "/run/user/1000")
+	if controlDir() != "/run/user/1000/limoni-backdrop" {
+		t.Fatalf("a short runtime directory was not used: %s", controlDir())
+	}
+}

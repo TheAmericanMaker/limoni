@@ -1,5 +1,7 @@
 # backdrop-shell
 
+<p align="center"><img src="../../assets/backdrop-shell.gif" alt="backdrop-shell: a fish prompt over an animated aurora; ls lists files in front of it, backdrop-shell opacity 0.9 brightens it at once, and backdrop-shell enable -scene synthwave switches the running terminal to a striped sunset over a neon grid" width="100%" /></p>
+
 Your shell, in front of an animated scene, a picture, or your own ASCII art —
 in any terminal with 256 colours or more.
 

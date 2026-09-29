@@ -216,6 +216,26 @@ can do over MCP: type into `search`, click the row, read `image#globe` back as
 `value="39.3°N 34.5°E · zoom 2.6×"`. Nothing of it reaches you when you import Limoni — a
 directory with its own `go.mod` is not part of the module around it.
 
+### And your shell: backdrop-shell
+
+<p align="center"><img src="assets/backdrop-shell.gif" alt="backdrop-shell: a fish prompt over an animated aurora; ls lists files in front of it, backdrop-shell opacity 0.9 brightens it at once, and backdrop-shell enable -scene synthwave switches the running terminal to a striped sunset over a neon grid" width="100%" /></p>
+
+[**backdrop-shell**](apps/backdrop-shell) puts a moving scene behind your shell, in any terminal —
+an aurora, a night city, a starfield, a synthwave sunset, a picture, or ASCII art of your own that
+blinks or drifts. The text in front stays sharp, selecting copies only what the shell wrote, a
+narrower window keeps every line, and the opacity or the scene changes at once in every open
+terminal. It costs about half a percent of one core, and nothing while the window is in the
+background.
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/thebanri/limoni/main/apps/backdrop-shell/install.sh | sh
+backdrop-shell opacity 0.3                # quieter, in every open terminal
+backdrop-shell enable -scene synthwave    # or -image wall.jpg, or -art my-art.txt
+```
+
+Drawing and animating your own: [docs/backdrop-art.md](docs/backdrop-art.md). The same scenes go
+behind any Limoni application with `limoni.WithBackdrop(backdrop.Aurora())`.
+
 ### And a game: Castle Lemonstein
 
 <p align="center"><img src="assets/castle-lemonstein.png" alt="Castle Lemonstein: the moonlit castle title screen with gold lettering and burgundy banners" width="100%" /></p>

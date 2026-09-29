@@ -27,7 +27,10 @@ import (
 // controlDir is where the wrappers' sockets are: the user's runtime
 // directory, or a private one in the temporary directory.
 func controlDir() string {
-	if d := os.Getenv("XDG_RUNTIME_DIR"); d != "" {
+	// A socket's path must fit in about a hundred bytes; a runtime directory
+	// too deep for that falls back to the temporary one.
+	const room = 100 - len("/limoni-backdrop/4194304.sock")
+	if d := os.Getenv("XDG_RUNTIME_DIR"); d != "" && len(d) <= room {
 		return filepath.Join(d, "limoni-backdrop")
 	}
 	return filepath.Join(os.TempDir(), "limoni-backdrop-"+strconv.Itoa(os.Getuid()))

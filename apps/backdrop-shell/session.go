@@ -84,7 +84,9 @@ type session struct {
 	// has room again.
 	earned int
 	// termBg is the terminal's background colour, which the scene fades into.
-	termBg     cell.Color
+	termBg cell.Color
+	// rep writes out REP for the emulator, which repeats only ASCII (rep.go).
+	rep        repFilter
 	scroll     int  // lines scrolled back into history, 0 at the live screen
 	focused    bool // the terminal window has focus
 	sceneFrame int  // the scene frame last rendered, -1 for none
@@ -318,6 +320,7 @@ func (s *session) feed(data []byte, output chan []byte) {
 // clear sends) empties hist too: the emulator only empties its own
 // scrollback, which hist has already emptied.
 func (s *session) write1(data []byte) {
+	data = s.rep.filter(data)
 	_, _ = s.emu.Write(data)
 	if bytes.Contains(data, []byte("\x1b[3J")) {
 		s.emu.ClearScrollback()
