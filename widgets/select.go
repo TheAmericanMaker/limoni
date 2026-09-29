@@ -59,8 +59,8 @@ type Select struct {
 	SelectedStyle cell.Style
 	HoverStyle    cell.Style
 	BorderStyle   cell.Style
-	DisableScroll bool // Fare tekerleğiyle seçenek değiştirmeyi kapatır
-	DisableFocus  bool // Tıklamayla odak almayı kapatır
+	DisableScroll bool // Turns off changing the option with the mouse wheel
+	DisableFocus  bool // Turns off taking the focus on click
 	OnChange      func(index int, option string)
 }
 
@@ -98,7 +98,7 @@ func (s Select) Draw(ctx cell.Context, buf *buffer.Buffer) {
 		setClipped(buf, ctx.Area.X+1, ctx.Area.Y, label+indicator, fieldStyle, int(ctx.Area.Width)-2)
 	}
 
-	// Fare tıklama ve tekerlek işleyicisi
+	// Mouse click and wheel handler
 	if ctx.RegisterMouse != nil {
 		ctx.RegisterMouse(ctx.Area, func(ev driver.MouseEvent) {
 			if ev.Button == driver.MouseLeft && !ev.Drag {

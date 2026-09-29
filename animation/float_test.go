@@ -14,17 +14,17 @@ func TestFloatAnimation(t *testing.T) {
 		t.Error("Yeni oluşturulan float animasyon durumunda olmamalıdır")
 	}
 
-	// 100ms süren doğrusal animasyon başlat
+	// Start a 100ms linear animation
 	f.AnimateTo(20.0, 100*time.Millisecond, Linear)
 	if !f.IsAnimating() {
 		t.Error("AnimateTo çağrısından sonra animasyon başlamış olmalıydı")
 	}
 
-	// Test için başlangıç zamanını kontrol edilebilir kıl
+	// Make the start time controllable for the test
 	now := time.Now()
 	f.startTime = now
 
-	// 50ms sonra (yarı yolda) güncelle
+	// Update after 50ms (halfway)
 	f.Update(now.Add(50 * time.Millisecond))
 	if f.Value() != 15.0 {
 		t.Errorf("50ms sonra değer %v; 15.0 bekleniyordu", f.Value())
@@ -33,7 +33,7 @@ func TestFloatAnimation(t *testing.T) {
 		t.Error("Yarı yolda animasyon hâlâ devam etmeliydi")
 	}
 
-	// 100ms sonra (tam zamanında veya sonrasında) güncelle
+	// Update after 100ms (on time or later)
 	stillAnimating := f.Update(now.Add(100 * time.Millisecond))
 	if stillAnimating {
 		t.Error("Süre bittiğinde Update false dönmeliydi")

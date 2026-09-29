@@ -12,9 +12,9 @@ import (
 
 type Markdown struct {
 	ID string
-	// Content, parse edilip çizilecek olan ham markdown metnidir.
+	// Content is the raw markdown text to parse and draw.
 	Content string
-	// Style, varsayılan metin stilini tanımlar.
+	// Style is the default text style.
 	Style        cell.Style
 	FocusedStyle cell.Style
 	ScrollOffset *int
@@ -237,9 +237,9 @@ func (m *Markdown) Draw(ctx cell.Context, buf *buffer.Buffer) {
 			case driver.MouseScrollDown:
 				*m.ScrollOffset = clampMarkdownOffset(*m.ScrollOffset+1, maxOffset)
 			case driver.MouseLeft:
-				// Tıklanan alan içinde dikey sürükleme ile metni kaydır.
-				// Resize tutamacı child area'nın dışında olduğu için bu handler
-				// yükseklik değiştirme sürüklemesiyle çakışmaz.
+				// Scroll the text by dragging vertically inside the clicked area.
+				// The resize handle is outside the child area, so this handler does not
+				// clash with the height-resizing drag.
 				if ctx.SetFocus != nil {
 					ctx.SetFocus(m.ID)
 				}

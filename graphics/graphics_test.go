@@ -14,8 +14,8 @@ func createTestImage() image.Image {
 	img := image.NewRGBA(image.Rect(0, 0, 2, 2))
 	img.Set(0, 0, color.RGBA{R: 255, G: 0, B: 0, A: 255})     // red
 	img.Set(1, 0, color.RGBA{R: 0, G: 255, B: 0, A: 255})     // green
-	img.Set(0, 1, color.RGBA{R: 0, G: 0, B: 255, A: 255})     // Mavi
-	img.Set(1, 1, color.RGBA{R: 255, G: 255, B: 255, A: 255}) // Beyaz
+	img.Set(0, 1, color.RGBA{R: 0, G: 0, B: 255, A: 255})     // blue
+	img.Set(1, 1, color.RGBA{R: 255, G: 255, B: 255, A: 255}) // white
 	return img
 }
 

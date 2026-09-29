@@ -6,7 +6,7 @@ import (
 	"github.com/thebanri/limoni/core/cell"
 )
 
-// TestClearFastPathClearsWrittenCells, hızlı yolun yazılmış hücreleri atlamadığını doğrular.
+// TestClearFastPathClearsWrittenCells checks that the fast path does not skip written cells.
 func TestClearFastPathClearsWrittenCells(t *testing.T) {
 	buf := NewBuffer(cell.NewRect(0, 0, 10, 3))
 	var style cell.Style
@@ -21,8 +21,8 @@ func TestClearFastPathClearsWrittenCells(t *testing.T) {
 	}
 }
 
-// TestClearFastPathSkipsCleanBuffer, temiz tamponda Clear'ın IsDirty bayrağını
-// yeniden tetiklemediğini doğrular.
+// TestClearFastPathSkipsCleanBuffer checks that Clear on a clean buffer does not
+// set the IsDirty flag again.
 func TestClearFastPathSkipsCleanBuffer(t *testing.T) {
 	buf := NewBuffer(cell.NewRect(0, 0, 10, 3))
 	buf.IsDirty = false
@@ -32,8 +32,8 @@ func TestClearFastPathSkipsCleanBuffer(t *testing.T) {
 	}
 }
 
-// TestInvalidateForcesFullClear, Content dilimine doğrudan yazıldıktan sonra
-// Invalidate çağrısının hızlı yolu devre dışı bıraktığını doğrular.
+// TestInvalidateForcesFullClear checks that calling Invalidate after writing to the
+// Content slice directly disables the fast path.
 func TestInvalidateForcesFullClear(t *testing.T) {
 	buf := NewBuffer(cell.NewRect(0, 0, 4, 1))
 	buf.Invalidate()

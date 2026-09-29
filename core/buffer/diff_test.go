@@ -29,19 +29,19 @@ func TestDiffCharacterChange(t *testing.T) {
 	front := NewBuffer(area)
 	back := NewBuffer(area)
 
-	// (1, 0)'da bir karakter değiştir
+	// Change one character at (1, 0)
 	front.SetCell(1, 0, cell.Cell{Content: 'A'})
 
 	out := make([]byte, 0, 1024)
 	out, _ = Diff(front, back, out, true, true)
 
-	// Beklenen: İmleç konumlandırma "\x1b[1;2HA" (y+1=1, x+1=2) ve ardından "A"
+	// Expected: cursor positioning "\x1b[1;2HA" (y+1=1, x+1=2), then "A"
 	expected := "\x1b[1;2HA"
 	if !bytes.Equal(out, []byte(expected)) {
 		t.Errorf("Beklenen çıktı: %q, Alınan: %q", expected, string(out))
 	}
 
-	// Back tamponunun güncellendiğini doğrula
+	// Check the back buffer was updated
 	if back.Get(1, 0).Content != 'A' {
 		t.Errorf("Back tamponu güncellenmedi")
 	}
@@ -52,7 +52,7 @@ func TestDiffStyleTransitions(t *testing.T) {
 	front := NewBuffer(area)
 	back := NewBuffer(area)
 
-	// (0, 0)'da Bold ve TrueColor Fg stilinde 'B' yaz
+	// Write 'B' at (0, 0) in Bold and TrueColor Fg style
 	style := cell.Style{
 		Fg:       cell.NewColorRGB(255, 0, 0),
 		Bg:       cell.NewColorDefault(),
@@ -63,7 +63,7 @@ func TestDiffStyleTransitions(t *testing.T) {
 	out := make([]byte, 0, 1024)
 	out, _ = Diff(front, back, out, true, true)
 
-	// Beklenen: İmleç (\x1b[1;1H) + Fg RGB (\x1b[38;2;255;0;0m) + Bold (\x1b[1m) + 'B' + Reset style at frame end (\x1b[0m)
+	// Expected: cursor (\x1b[1;1H) + Fg RGB (\x1b[38;2;255;0;0m) + Bold (\x1b[1m) + 'B' + Reset style at frame end (\x1b[0m)
 	if !bytes.Contains(out, []byte("B")) {
 		t.Errorf("Çıktıda karakter bulunamadı: %q", string(out))
 	}
@@ -83,7 +83,7 @@ func TestDiffModifierRemoval(t *testing.T) {
 	front := NewBuffer(area)
 	back := NewBuffer(area)
 
-	// front tamponunda (0,0) Bold 'A', (1,0) normal 'B' yapalım
+	// In the front buffer, make (0,0) a bold 'A' and (1,0) a plain 'B'
 	front.SetCell(0, 0, cell.Cell{
 		Content: 'A',
 		Style:   cell.Style{Modifier: cell.ModifierBold},
@@ -96,8 +96,8 @@ func TestDiffModifierRemoval(t *testing.T) {
 	out := make([]byte, 0, 1024)
 	out, _ = Diff(front, back, out, true, true)
 
-	// Çıktıda Bold 'A' dan Normal 'B' ye geçerken \x1b[0m (reset) bulunmalıdır.
-	// Tam çıktı: \x1b[1;1H\x1b[1mA\x1b[0mB
+	// Going from the bold 'A' to the plain 'B', the output must contain \x1b[0m (reset).
+	// Full output: \x1b[1;1H\x1b[1mA\x1b[0mB
 	expected := "\x1b[1;1H\x1b[1mA\x1b[0mB"
 	if !bytes.Equal(out, []byte(expected)) {
 		t.Errorf("Beklenen çıktı: %q, Alınan: %q", expected, string(out))
@@ -105,14 +105,14 @@ func TestDiffModifierRemoval(t *testing.T) {
 }
 
 // BENCHMARKS
-// 120x40 çözünürlüğünde terminal ekranı için performans testleri.
+// Performance tests for a 120x40 terminal screen.
 
 func BenchmarkDiff_NoChanges(b *testing.B) {
-	area := cell.NewRect(0, 0, 120, 40) // 4800 hücre
+	area := cell.NewRect(0, 0, 120, 40) // 4800 cells
 	front := NewBuffer(area)
 	back := NewBuffer(area)
 
-	// Ön bellek ayırma
+	// Preallocate
 	out := make([]byte, 0, 8192)
 
 	b.ResetTimer()
@@ -190,7 +190,7 @@ func TestDiffBufferGetMutationNotSkipped(t *testing.T) {
 	front := NewBuffer(area)
 	back := NewBuffer(area)
 
-	// İlk diff - her iki tampon da temiz
+	// First diff - both buffers are clean
 	out, err := Diff(front, back, nil, true, true)
 	if err != nil {
 		t.Fatalf("Diff failed: %v", err)
@@ -199,7 +199,7 @@ func TestDiffBufferGetMutationNotSkipped(t *testing.T) {
 		t.Fatal("front should not be dirty after clean diff")
 	}
 
-	// Buffer.Get ile doğrudan hücre mutasyonu yap
+	// Mutate a cell directly through Buffer.Get
 	cellPtr := front.Get(2, 2)
 	if cellPtr == nil {
 		t.Fatal("Get(2, 2) returned nil")
@@ -211,7 +211,7 @@ func TestDiffBufferGetMutationNotSkipped(t *testing.T) {
 		t.Fatal("front.IsDirty must be true after calling Buffer.Get")
 	}
 
-	// Diff doğrudan hücre mutasyonunu yakalamalı ve kaçış kodu üretmeli
+	// Diff must pick up the direct cell mutation and emit escape codes
 	out, err = Diff(front, back, out[:0], true, true)
 	if err != nil {
 		t.Fatalf("Diff failed: %v", err)
@@ -226,11 +226,11 @@ func TestDiffWideCharacters(t *testing.T) {
 	front := NewBuffer(area)
 	back := NewBuffer(area)
 
-	// SetString ile emoji yaz
+	// Write emoji with SetString
 	style := cell.Style{}
 	front.SetString(0, 0, "🔴A", style)
 
-	// front buffer hücrelerini doğrula
+	// Check the front buffer's cells
 	if front.Get(0, 0).Content != '🔴' {
 		t.Errorf("Beklenen emoji U+1F534, alınan: %c", front.Get(0, 0).Content)
 	}
@@ -247,9 +247,9 @@ func TestDiffWideCharacters(t *testing.T) {
 		t.Fatalf("Diff hatası: %v", err)
 	}
 
-	// 🔴 (U+1F534) utf-8 olarak 4 byte kaplar. A ise 1 byte.
-	// Diff çıktısında continuation hücresi (index 1) yazılmamalıdır.
-	// Yani sadece 🔴 ve A yazılmalıdır.
+	// 🔴 (U+1F534) takes 4 bytes in UTF-8; A takes 1.
+	// The continuation cell (index 1) must not be written in the diff output,
+	// so only 🔴 and A are written.
 	if !bytes.Contains(out, []byte("🔴")) {
 		t.Errorf("Çıktı emojiyi içermeliydi: %q", string(out))
 	}

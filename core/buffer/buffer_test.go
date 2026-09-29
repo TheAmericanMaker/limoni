@@ -19,7 +19,7 @@ func TestNewBuffer(t *testing.T) {
 		t.Errorf("İçerik boyutu hatalı. Beklenen: 200, alınan: %d", len(buf.Content))
 	}
 
-	// Tüm hücrelerin boşluk karakteri ve default style ile başladığını doğrula
+	// Check every cell starts as a space with the default style
 	for i, c := range buf.Content {
 		if c.Content != ' ' {
 			t.Errorf("İndeks %d varsayılan karakter boşluk olmalıydı, alınan: %q", i, c.Content)
@@ -53,7 +53,7 @@ func TestBufferGetSet(t *testing.T) {
 		t.Errorf("Hücre değeri doğru set edilmedi")
 	}
 
-	// Geçersiz koordinat testi
+	// Out-of-range coordinate test
 	if out := buf.Get(10, 5); out != nil {
 		t.Errorf("Sınır dışı koordinat nil dönmeliydi")
 	}
@@ -66,7 +66,7 @@ func TestBufferSetString(t *testing.T) {
 	style := cell.Style{Fg: cell.NewColorRGB(255, 0, 0)}
 	buf.SetString(2, 1, "Merhaba", style)
 
-	// "Merhaba" 7 karakter. (2, 1)'den başlayarak (8, 1)'e kadar yazar.
+	// "Merhaba" is 7 characters. Starting at (2, 1) it writes up to (8, 1).
 	expected := "Merhaba"
 	for i, r := range expected {
 		got := buf.Get(uint16(2+i), 1)
@@ -78,15 +78,15 @@ func TestBufferSetString(t *testing.T) {
 		}
 	}
 
-	// Sınır aşımı kontrolü (Wrap olmamalı, kesilmeli)
+	// Bounds check (must be cut off, not wrapped)
 	buf.Clear()
-	buf.SetString(7, 1, "UzunMetin", style) // (7, 1)'de başlar. Sadece "Uzu" yazabilmeli (genişlik 10)
+	buf.SetString(7, 1, "UzunMetin", style) // Starts at (7, 1). Only "Uzu" fits (width 10)
 
 	if buf.Get(9, 1).Content != 'u' {
 		t.Errorf("Sınırda kesilme hatalı. (9,1) 'u' olmalı, alınan: %c", buf.Get(9, 1).Content)
 	}
 
-	// Geçersiz koordinatta SetString paniklememeli
+	// SetString at an invalid coordinate must not panic
 	buf.SetString(20, 20, "Test", style)
 }
 
@@ -114,21 +114,21 @@ func TestBufferSetStringWithin(t *testing.T) {
 }
 
 func TestBufferResizeAllocation(t *testing.T) {
-	area := cell.NewRect(0, 0, 10, 10) // 100 hücre
+	area := cell.NewRect(0, 0, 10, 10) // 100 cells
 	buf := NewBuffer(area)
 
 	ptrBefore := unsafe.Pointer(&buf.Content[0])
 
-	// Daha küçük veya eşit boyuta resize
-	buf.Resize(cell.NewRect(0, 0, 5, 5)) // 25 hücre
+	// Resize to a smaller or equal size
+	buf.Resize(cell.NewRect(0, 0, 5, 5)) // 25 cells
 	ptrAfter := unsafe.Pointer(&buf.Content[0])
 
 	if ptrBefore != ptrAfter {
 		t.Errorf("Kapasite yeterliyken bellek yeniden tahsis edildi (re-allocated)")
 	}
 
-	// Kapasiteyi aşan boyuta resize
-	buf.Resize(cell.NewRect(0, 0, 15, 10)) // 150 hücre
+	// Resize beyond the capacity
+	buf.Resize(cell.NewRect(0, 0, 15, 10)) // 150 cells
 	ptrNew := unsafe.Pointer(&buf.Content[0])
 
 	if ptrBefore == ptrNew {
@@ -140,7 +140,7 @@ func TestBufferTransparentInheritance(t *testing.T) {
 	area := cell.NewRect(0, 0, 10, 5)
 	buf := NewBuffer(area)
 
-	// 1. Panelin zemin rengini koy (ör. Surface lacivert)
+	// 1. Paint the panel background (e.g. a navy Surface)
 	surfaceBg := cell.NewColorRGB(25, 28, 36)
 	for y := uint16(0); y < 5; y++ {
 		for x := uint16(0); x < 10; x++ {
@@ -148,7 +148,7 @@ func TestBufferTransparentInheritance(t *testing.T) {
 		}
 	}
 
-	// 2. SetString ile arkaplanı belirtilmemiş (Bg=0) metin yaz
+	// 2. Write text with SetString and no background (Bg=0)
 	textFg := cell.NewColorRGB(200, 220, 255)
 	buf.SetString(2, 2, "Test", cell.Style{Fg: textFg})
 
@@ -168,7 +168,7 @@ func TestBufferTransparentInheritance(t *testing.T) {
 		}
 	}
 
-	// 3. SetCell ile arkaplanı belirtilmemiş tek bir hücre yaz
+	// 3. Write a single cell with SetCell and no background
 	buf.SetCell(0, 0, cell.Cell{Content: '●', Style: cell.Style{Fg: textFg}})
 	thumb := buf.Get(0, 0)
 	if thumb.Content != '●' {
@@ -178,7 +178,7 @@ func TestBufferTransparentInheritance(t *testing.T) {
 		t.Errorf("SetCell şeffaf kalıtım başarısız! Arkaplan korunmalıydı: beklenen %v, alınan %v", surfaceBg, thumb.Style.Bg)
 	}
 
-	// 4. Özel arkaplan tanımlandığında ezebilmeli
+	// 4. An explicit background must override it
 	customBg := cell.NewColorRGB(255, 0, 0)
 	buf.SetString(0, 1, "Red", cell.Style{Fg: textFg, Bg: customBg})
 	redCell := buf.Get(0, 1)

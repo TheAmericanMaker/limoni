@@ -81,14 +81,14 @@ func TestModalStackSandboxing(t *testing.T) {
 	focusMgr := NewFocusManager()
 	f := NewFrame(buf, focusMgr)
 
-	// Modal A (ZIndex: 100) ve Modal B (ZIndex: 200) ekle
+	// Add Modal A (ZIndex: 100) and Modal B (ZIndex: 200)
 	areaA := cell.NewRect(10, 10, 20, 10)
 	areaB := cell.NewRect(40, 10, 20, 10)
 
 	f.RegisterLayer("modal_a", LayerModal, areaA, 100, func() {})
 	f.RegisterLayer("modal_b", LayerModal, areaB, 200, func() {})
 
-	// Test 1: Modal A içindeki bir widget çizilirken odak/tıklama bloke olmalı (çünkü Modal B en üstte)
+	// Test 1: a widget drawn inside modal A must have its focus/clicks blocked (modal B is on top)
 	f.activeLayerID = "modal_a"
 	dummyA := DummyWidget{ID: "widget_a"}
 	f.RenderWidget(dummyA, areaA)
@@ -97,7 +97,7 @@ func TestModalStackSandboxing(t *testing.T) {
 		t.Errorf("Modal A'daki widget odaklandı, en üstte Modal B varken bloke olmalıydı")
 	}
 
-	// Test 2: Modal B içindeki bir widget çizilirken odak/tıklama onaylanmalı (çünkü kendisi en üstte)
+	// Test 2: a widget drawn inside modal B must have its focus/clicks accepted (it is on top itself)
 	f.activeLayerID = "modal_b"
 	dummyB := DummyWidget{ID: "widget_b"}
 	f.RenderWidget(dummyB, areaB)

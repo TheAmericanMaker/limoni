@@ -66,8 +66,8 @@ type Slider struct {
 	FilledStyle   cell.Style
 	ThumbStyle    cell.Style
 	FocusedStyle  cell.Style
-	DisableScroll bool // Fare tekerleğiyle değer değiştirmeyi kapatır
-	DisableFocus  bool // Tıklamayla odak almayı kapatır
+	DisableScroll bool // Turns off changing the value with the mouse wheel
+	DisableFocus  bool // Turns off taking the focus on click
 	OnChange      func(value int)
 }
 

@@ -9,7 +9,7 @@ import (
 	"github.com/thebanri/limoni/core/driver"
 )
 
-// testCommandItems, komut paleti testleri için ortak bir komut seti döndürür.
+// testCommandItems returns a shared set of commands for the command palette tests.
 func testCommandItems() []CommandItem {
 	return []CommandItem{
 		{Label: "Giriş Sekmesine Git", Detail: "", Category: "Navigasyon",
@@ -103,7 +103,7 @@ func TestCommandPaletteState_OpenResetsState(t *testing.T) {
 	state := NewCommandPaletteState()
 	state.AllItems = testCommandItems()
 
-	// Önce kirli durum oluştur
+	// Make the state dirty first
 	state.Query.SetValue("yardım")
 	state.Selected = 3
 	state.ScrollOffset = 2
@@ -121,7 +121,7 @@ func TestCommandPaletteState_OpenResetsState(t *testing.T) {
 	if state.ScrollOffset != 0 {
 		t.Fatalf("Open sonrası ScrollOffset = %d; 0 bekleniyordu", state.ScrollOffset)
 	}
-	// Boş sorgu tüm öğeleri getirmeli
+	// An empty query must return every item
 	if len(state.Filtered) != len(state.AllItems) {
 		t.Fatalf("Filtered uzunluğu = %d; %d bekleniyordu", len(state.Filtered), len(state.AllItems))
 	}
@@ -149,7 +149,7 @@ func TestCommandPaletteState_HandleKey_Closed(t *testing.T) {
 	state := NewCommandPaletteState()
 	state.AllItems = testCommandItems()
 
-	// Kapalıyken hiçbir tuş tüketilmemeli
+	// While closed, no key may be consumed
 	if state.HandleKey(driver.KeyEvent{Type: driver.KeyEsc}) {
 		t.Fatal("kapalı palet Esc'i tüketmemeli")
 	}
@@ -192,7 +192,7 @@ func TestCommandPaletteState_HandleKey_EnterRunsHandler(t *testing.T) {
 	ran := false
 	state.Filtered[1].Handler = func() { ran = true }
 
-	// İkinci öğeyi seç
+	// Select the second item
 	state.HandleKey(driver.KeyEvent{Type: driver.KeyArrowDown})
 	if state.Selected != 1 {
 		t.Fatalf("Selected = %d; 1 bekleniyordu", state.Selected)
@@ -211,13 +211,13 @@ func TestCommandPaletteState_HandleKey_EnterRunsHandler(t *testing.T) {
 
 func TestCommandPaletteState_HandleKey_EnterNoSelection(t *testing.T) {
 	state := NewCommandPaletteState()
-	state.AllItems = []CommandItem{} // Boş liste
+	state.AllItems = []CommandItem{} // Empty list
 	state.Open()
 
 	if !state.HandleKey(driver.KeyEvent{Type: driver.KeyEnter}) {
 		t.Fatal("Enter tüketilmeli")
 	}
-	// Panik olmamalı, palet kapanmalı
+	// Must not panic; the palette must close
 	if state.IsOpen {
 		t.Fatal("Enter sonrası palet kapanmalı")
 	}
@@ -228,19 +228,19 @@ func TestCommandPaletteState_HandleKey_Navigation(t *testing.T) {
 	state.AllItems = testCommandItems()
 	state.Open()
 
-	// Yukarı: sınırda kalmalı
+	// Up: must stay at the boundary
 	state.HandleKey(driver.KeyEvent{Type: driver.KeyArrowUp})
 	if state.Selected != 0 {
 		t.Fatalf("üst sınırda Selected = %d; 0 bekleniyordu", state.Selected)
 	}
 
-	// Aşağı
+	// Down
 	state.HandleKey(driver.KeyEvent{Type: driver.KeyArrowDown})
 	if state.Selected != 1 {
 		t.Fatalf("Selected = %d; 1 bekleniyordu", state.Selected)
 	}
 
-	// Son öğeye git
+	// Go to the last item
 	for i := 0; i < 10; i++ {
 		state.HandleKey(driver.KeyEvent{Type: driver.KeyArrowDown})
 	}
@@ -248,7 +248,7 @@ func TestCommandPaletteState_HandleKey_Navigation(t *testing.T) {
 		t.Fatalf("alt sınırda Selected = %d; %d bekleniyordu", state.Selected, len(state.Filtered)-1)
 	}
 
-	// Alt sınırda daha aşağı inmemeli
+	// At the bottom it must not go further down
 	state.HandleKey(driver.KeyEvent{Type: driver.KeyArrowDown})
 	if state.Selected != len(state.Filtered)-1 {
 		t.Fatalf("alt sınır aşıldı: Selected = %d", state.Selected)
@@ -258,7 +258,7 @@ func TestCommandPaletteState_HandleKey_Navigation(t *testing.T) {
 func TestCommandPaletteState_HandleKey_ScrollOffset(t *testing.T) {
 	state := NewCommandPaletteState()
 	state.MaxVisible = 2
-	// 5 öğe oluştur
+	// Create 5 items
 	items := make([]CommandItem, 5)
 	for i := range items {
 		items[i] = CommandItem{Label: "Komut", Category: "A"}
@@ -266,7 +266,7 @@ func TestCommandPaletteState_HandleKey_ScrollOffset(t *testing.T) {
 	state.AllItems = items
 	state.Open()
 
-	// 3 kez aşağı in: Selected=3, ScrollOffset 2 olmalı (3 - 2 + 1)
+	// Down 3 times: Selected=3, ScrollOffset must be 2 (3 - 2 + 1)
 	for i := 0; i < 3; i++ {
 		state.HandleKey(driver.KeyEvent{Type: driver.KeyArrowDown})
 	}
@@ -277,12 +277,12 @@ func TestCommandPaletteState_HandleKey_ScrollOffset(t *testing.T) {
 		t.Fatalf("ScrollOffset = %d; 2 bekleniyordu", state.ScrollOffset)
 	}
 
-	// Yukarı çıkınca offset geri gelmeli
+	// Going up must bring the offset back
 	state.HandleKey(driver.KeyEvent{Type: driver.KeyArrowUp})
 	if state.Selected != 2 {
 		t.Fatalf("Selected = %d; 2 bekleniyordu", state.Selected)
 	}
-	// Selected=2, MaxVisible=2: görünür pencere [2,3] -> offset 2 kalmalı
+	// Selected=2, MaxVisible=2: visible window [2,3] -> offset must stay 2
 	if state.ScrollOffset != 2 {
 		t.Fatalf("ScrollOffset = %d; 2 bekleniyordu", state.ScrollOffset)
 	}
@@ -303,7 +303,7 @@ func TestCommandPaletteState_HandleKey_FiltersOnTyping(t *testing.T) {
 	state.AllItems = testCommandItems()
 	state.Open()
 
-	// "yard" yazınca sadece Yardım eşleşmeli
+	// Typing "yard" must match only Yardım
 	for _, r := range "yard" {
 		state.HandleKey(driver.KeyEvent{Type: driver.KeyRune, Ch: r})
 	}
@@ -330,13 +330,13 @@ func TestCommandPaletteState_HandleKey_BackspaceRefilters(t *testing.T) {
 		t.Fatalf("filtreleme öncesi Filtered = %d; 1 bekleniyordu", len(state.Filtered))
 	}
 
-	// Backspace ile "yar" kalmalı -> "Yardım Panelini Aç" ve "Ayarlar Sekmesine Git" eşleşir
+	// Backspace leaves "yar" -> matches "Yardım Panelini Aç" and "Ayarlar Sekmesine Git"
 	state.HandleKey(driver.KeyEvent{Type: driver.KeyBackspace})
 	if len(state.Filtered) != 2 {
 		t.Fatalf("backspace sonrası Filtered = %d; 2 bekleniyordu", len(state.Filtered))
 	}
 
-	// Tümünü sil -> tüm öğeler geri gelmeli
+	// Delete everything -> every item must come back
 	for state.Query.Value() != "" {
 		state.HandleKey(driver.KeyEvent{Type: driver.KeyBackspace})
 	}
@@ -350,7 +350,7 @@ func TestCommandPaletteState_HandleKey_ReturnsTrueWhenOpen(t *testing.T) {
 	state.AllItems = testCommandItems()
 	state.Open()
 
-	// Açıkken herhangi bir tuş tüketilmeli (yazma dahil)
+	// While open, any key must be consumed (typing included)
 	if !state.HandleKey(driver.KeyEvent{Type: driver.KeyRune, Ch: 'x'}) {
 		t.Fatal("açık palet tuş girişini tüketmeli")
 	}

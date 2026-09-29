@@ -23,7 +23,7 @@ func TestModalCenteringAndContains(t *testing.T) {
 		t.Errorf("CenterRect coordinates = (%d, %d); (%d, %d) bekleniyordu", centered.X, centered.Y, expectedX, expectedY)
 	}
 
-	// ContainsRect testleri
+	// ContainsRect tests
 	inside := cell.NewRect(25, 8, 10, 5)
 	if !ContainsRect(centered, inside) {
 		t.Errorf("ContainsRect = false; inside rect should be contained in centered")
@@ -57,19 +57,19 @@ func TestModalFocusAndClickTrapping(t *testing.T) {
 	focusMgr := NewFocusManager()
 	frame := NewFrame(buf, focusMgr)
 
-	// Modal alanını belirle (merkezde 40x10)
+	// Place the modal (40x10, centred)
 	modalArea := cell.NewRect(20, 7, 40, 10)
 	frame.RegisterModal("test_modal", modalArea, nil)
 
-	// 1. Modal içerisindeki widget'ı çiz (odaklanabilir/tıklanabilir olmalı)
+	// 1. Draw the widget inside the modal (it must be focusable and clickable)
 	insideW := dummyWidget{id: "inside"}
 	frame.RenderWidget(insideW, cell.NewRect(25, 8, 10, 2))
 
-	// 2. Modal dışındaki widget'ı çiz (odaklanması ve tıklanması bloklanmalı!)
+	// 2. Draw the widget outside the modal (its focus and clicks must be blocked!)
 	outsideW := dummyWidget{id: "outside"}
 	frame.RenderWidget(outsideW, cell.NewRect(0, 0, 10, 2))
 
-	// Doğrulama
+	// Checks
 	if len(focusMgr.focusable) != 1 {
 		t.Errorf("Focus list len = %d; 1 bekleniyordu (outside widget engellenmeliydi)", len(focusMgr.focusable))
 	}
@@ -87,14 +87,14 @@ func TestRouteMouseEventWithModal(t *testing.T) {
 		frame: NewFrame(nil, NewFocusManager()),
 	}
 
-	// Modal kaydet
+	// Register modal
 	modalArea := cell.NewRect(20, 7, 40, 10)
 	outsideClicked := false
 	trm.frame.RegisterModal("test_modal", modalArea, func() {
 		outsideClicked = true
 	})
 
-	// Modal içi click area
+	// Click area inside the modal
 	insideTriggered := false
 	trm.frame.ClickRegions = append(trm.frame.ClickRegions, ClickRegion{
 		Area:    cell.NewRect(25, 8, 5, 2),
@@ -104,7 +104,7 @@ func TestRouteMouseEventWithModal(t *testing.T) {
 		},
 	})
 
-	// Modal altındaki arka plan click area (çakışan koordinat)
+	// Background click area under the modal (overlapping coordinates)
 	backgroundTriggered := false
 	trm.frame.ClickRegions = append(trm.frame.ClickRegions, ClickRegion{
 		Area:    cell.NewRect(22, 8, 10, 2),
@@ -114,7 +114,7 @@ func TestRouteMouseEventWithModal(t *testing.T) {
 		},
 	})
 
-	// Modal dışı click area
+	// Click area outside the modal
 	outsideTriggered := false
 	trm.frame.ClickRegions = append(trm.frame.ClickRegions, ClickRegion{
 		Area:    cell.NewRect(5, 5, 5, 2),
@@ -124,7 +124,7 @@ func TestRouteMouseEventWithModal(t *testing.T) {
 		},
 	})
 
-	// 1. Modal içindeki boş alana tıklama (arka plana sızmamalı!)
+	// 1. Click on empty space inside the modal (must not leak to the background!)
 	handled := trm.RouteMouseEvent(driver.MouseEvent{X: 22, Y: 8, Button: driver.MouseLeft})
 	if !handled {
 		t.Errorf("Modal içi boşluk tıklaması yutulmalıydı (handled=true)!")
@@ -133,7 +133,7 @@ func TestRouteMouseEventWithModal(t *testing.T) {
 		t.Errorf("Modal altındaki arka plan bölgesi tetiklendi! Sızma engellenmeliydi.")
 	}
 
-	// 2. Modal içi butona tıklama
+	// 2. Click the button inside the modal
 	trm.RouteMouseEvent(driver.MouseEvent{X: 27, Y: 9, Button: driver.MouseLeft})
 	if !insideTriggered {
 		t.Errorf("Modal içi tıklama tetiklenmedi!")
@@ -142,7 +142,7 @@ func TestRouteMouseEventWithModal(t *testing.T) {
 		t.Errorf("Modal altındaki arka plan bölgesi tetiklendi!")
 	}
 
-	// 3. Modal dışına tıklama (click-outside tetiklenmeli ve dışarıdaki handler engellenmeli)
+	// 3. Click outside the modal (click-outside must fire and the handler outside must be blocked)
 	trm.RouteMouseEvent(driver.MouseEvent{X: 6, Y: 6, Button: driver.MouseLeft})
 	if !outsideClicked {
 		t.Errorf("ClickOutside callback tetiklenmedi!")
@@ -157,28 +157,28 @@ func TestLayerSystemBasic(t *testing.T) {
 	focusMgr := NewFocusManager()
 	frame := NewFrame(buf, focusMgr)
 
-	// 1. Kök katmanda bir widget çiz (ActiveModal yok, layer yok → serbest)
+	// 1. Draw a widget in the root layer (no ActiveModal, no layer → unrestricted)
 	rootWidget := dummyWidget{id: "root_item"}
 	frame.RenderWidget(rootWidget, cell.NewRect(5, 5, 10, 2))
 	if len(focusMgr.focusable) != 1 || focusMgr.focusable[0] != "root_item" {
 		t.Errorf("Kök widget odaklanamadı: %v", focusMgr.focusable)
 	}
-	// Temizle: İlk kök widget'ın tıklama alanlarını temizle ki sonraki testleri etkilemesin
+	// Clean up: clear the first root widget's click areas so they do not affect the next steps
 	frame.ClickRegions = frame.ClickRegions[:0]
 	frame.FocusManager.Clear()
 
-	// 2. Bir modal katman kaydet (sadece RegisterLayer ile)
+	// 2. Register a modal layer (with RegisterLayer only)
 	modalArea := cell.NewRect(20, 7, 40, 10)
 	frame.RegisterLayer("modal1", LayerModal, modalArea, 1000, nil)
 
-	// 3. Kök katmanda widget çiz → modal varken engellenmeli
+	// 3. Draw a widget in the root layer → must be blocked while the modal exists
 	outsideWidget := dummyWidget{id: "root_outside"}
 	frame.RenderWidget(outsideWidget, cell.NewRect(5, 5, 10, 2))
 	if len(focusMgr.focusable) != 0 {
 		t.Errorf("Kök widget odaklanmamalıydı (modal aktif): %v", focusMgr.focusable)
 	}
 
-	// 4. BeginLayer ile modal içinde çiz → kaydedilmeli
+	// 4. Draw inside the modal with BeginLayer → must be registered
 	insideWidget := dummyWidget{id: "modal_item"}
 	frame.BeginLayer("modal1")
 	frame.RenderWidget(insideWidget, cell.NewRect(25, 8, 10, 2))
@@ -191,7 +191,7 @@ func TestLayerSystemBasic(t *testing.T) {
 		t.Errorf("Focus = %q; 'modal_item' bekleniyordu", focusMgr.focusable[0])
 	}
 
-	// 5. Tıklama alanları kontrolü
+	// 5. Check the click areas
 	if len(frame.ClickRegions) != 1 {
 		t.Errorf("Click regions = %d; 1 bekleniyordu", len(frame.ClickRegions))
 	}
@@ -205,18 +205,18 @@ func TestMultiLayerZOrdering(t *testing.T) {
 		frame: NewFrame(nil, NewFocusManager()),
 	}
 
-	// Katman 1 (düşük z-index)
+	// Layer 1 (low z-index)
 	layer1Area := cell.NewRect(0, 0, 40, 12)
 	trm.frame.RegisterLayer("layer_low", LayerModal, layer1Area, 100, nil)
 
-	// Katman 2 (yüksek z-index) - layer1'in üstünde
+	// Layer 2 (high z-index) - above layer1
 	layer2Area := cell.NewRect(20, 5, 30, 10)
 	layer2Clicked := false
 	trm.frame.RegisterLayer("layer_high", LayerModal, layer2Area, 200, func() {
 		layer2Clicked = true
 	})
 
-	// Katman 2 içindeki click area
+	// Click area inside layer 2
 	highTriggered := false
 	trm.frame.ClickRegions = append(trm.frame.ClickRegions, ClickRegion{
 		Area:    cell.NewRect(25, 6, 10, 2),
@@ -224,7 +224,7 @@ func TestMultiLayerZOrdering(t *testing.T) {
 		LayerID: "layer_high",
 	})
 
-	// Katman 1 içindeki click area (ama üstteki katman 2 ile kesişiyor)
+	// Click area inside layer 1 (but overlapping layer 2 above it)
 	lowTriggered := false
 	trm.frame.ClickRegions = append(trm.frame.ClickRegions, ClickRegion{
 		Area:    cell.NewRect(25, 6, 10, 2),
@@ -232,7 +232,7 @@ func TestMultiLayerZOrdering(t *testing.T) {
 		LayerID: "layer_low",
 	})
 
-	// Kesişim alanına tıklama: En üstteki katman (layer_high) yakalamalı
+	// Click in the overlap: the topmost layer (layer_high) must catch it
 	trm.RouteMouseEvent(driver.MouseEvent{X: 27, Y: 7, Button: driver.MouseLeft})
 	if !highTriggered {
 		t.Errorf("En üst katmandaki handler tetiklenmedi!")
@@ -241,7 +241,7 @@ func TestMultiLayerZOrdering(t *testing.T) {
 		t.Errorf("Alt katmandaki handler tetiklendi! Üst katman engellemeliydi.")
 	}
 
-	// layer_high dışına tıklama → layer_high'ın ClickOutside tetiklenmeli
+	// Click outside layer_high → layer_high's ClickOutside must fire
 	trm.RouteMouseEvent(driver.MouseEvent{X: 5, Y: 5, Button: driver.MouseLeft})
 	if !layer2Clicked {
 		t.Errorf("En üst katmanın ClickOutside tetiklenmedi!")
@@ -260,7 +260,7 @@ func TestRemoveLayer(t *testing.T) {
 		t.Errorf("Layer count = %d; 2 bekleniyordu", len(frame.Layers))
 	}
 
-	// popup_b katmanını kaldır
+	// Remove the popup_b layer
 	frame.RemoveLayer("popup_b")
 	if len(frame.Layers) != 1 {
 		t.Errorf("Layer count after remove = %d; 1 bekleniyordu", len(frame.Layers))

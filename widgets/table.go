@@ -13,30 +13,30 @@ import (
 	"github.com/thebanri/limoni/layout"
 )
 
-// ConstraintType, sütun genişlik kuralını belirleyen kısıt türüdür.
+// ConstraintType is the kind of rule that sets a column's width.
 type ConstraintType int
 
 const (
-	ConstraintFixed      ConstraintType = iota // Sabit sütun genişliği (karakter cinsinden)
-	ConstraintPercentage                       // Yüzdesel sütun genişliği (toplam genişliğin %'si)
-	ConstraintFill                             // Sütunlardan kalan boş alanı doldurur
+	ConstraintFixed      ConstraintType = iota // Fixed column width (in characters)
+	ConstraintPercentage                       // Percentage column width (% of the total width)
+	ConstraintFill                             // Fills the space left over by the other columns
 )
 
-// TableConstraint, bir sütunun genişlik kuralını tanımlar.
+// TableConstraint is a column's width rule.
 type TableConstraint struct {
 	Type  ConstraintType
 	Value int
 }
 
-// TableCell, tablodaki tek bir hücrenin metin ve stil bilgisidir.
+// TableCell is the text and style of a single table cell.
 type TableCell struct {
 	Text    string
 	Style   cell.Style
-	ColSpan int // Birleştirilecek sütun sayısı (varsayılan veya 0/1 ise tek sütun)
-	RowSpan int // Birleştirilecek satır sayısı (varsayılan veya 0/1 ise tek satır)
+	ColSpan int // Number of columns to span (0 or 1 means a single column)
+	RowSpan int // Number of rows to span (0 or 1 means a single row)
 }
 
-// TableRow, tablodaki bir satırın hücre listesi ve satır stilidir.
+// TableRow is a table row's list of cells and its style.
 type TableRow struct {
 	Cells []TableCell
 	Style cell.Style
@@ -51,7 +51,7 @@ func (r TableRow) SearchText() string {
 	return strings.Join(parts, " ")
 }
 
-// NewRow, verilen kelime/metin listesinden standart stilli bir satır (TableRow) oluşturur.
+// NewRow returns a TableRow with the standard style from the given list of strings.
 func NewRow(cells ...string) TableRow {
 	rowCells := make([]TableCell, len(cells))
 	for i, c := range cells {
@@ -60,16 +60,16 @@ func NewRow(cells ...string) TableRow {
 	return TableRow{Cells: rowCells}
 }
 
-// TableState, tablodaki satır seçimini, dikey kaydırma (scrolling) ve sütun genişliklerini yönetir.
+// TableState manages a table's row selection, vertical scrolling and column widths.
 type TableState struct {
-	Selected         int      // Seçili satır indeksi (-1 ise seçim yok)
-	Offset           int      // Dikey kaydırma (scroll offset)
-	HorizontalOffset int      // Yatay kaydırma için hazırlanan sütun hücre offset'i miktarı
-	ColumnWidths     []uint16 // Sürüklenerek yeniden boyutlandırılan veya otomatik çözülen sütun genişlikleri
-	SortColumn       int      // Sıralanan sütun; -1 ise sıralama kapalı
+	Selected         int      // Selected row index (-1 means no selection)
+	Offset           int      // Vertical scroll offset
+	HorizontalOffset int      // Column cell offset, for horizontal scrolling
+	ColumnWidths     []uint16 // Column widths, resized by dragging or solved automatically
+	SortColumn       int      // The sorted column; -1 means sorting is off
 	SortDescending   bool
-	SelectedRows     map[int]struct{} // Çoklu satır seçimi
-	selectionDirty   bool             // Seçim değiştiğinde görünürlük ayarı gerektiğini belirtir.
+	SelectedRows     map[int]struct{} // Multiple row selection
+	selectionDirty   bool             // Set when the selection changed and the view needs adjusting to keep it visible.
 
 	rowsHandler    func(driver.MouseEvent)
 	scrollHandler  func(driver.MouseEvent)
@@ -147,7 +147,7 @@ var tableDrawScratchPool = sync.Pool{
 	},
 }
 
-// NewTableState, yeni bir TableState nesnesi oluşturur.
+// NewTableState returns a new TableState.
 func NewTableState() *TableState {
 	return &TableState{
 		Selected:       -1,
@@ -159,13 +159,13 @@ func NewTableState() *TableState {
 	}
 }
 
-// Select, belirli bir satırı seçer.
+// Select selects the given row.
 func (ts *TableState) Select(index int) {
 	ts.Selected = index
 	ts.selectionDirty = true
 }
 
-// Next, seçimi bir sonraki satıra taşır.
+// Next moves the selection to the next row.
 func (ts *TableState) Next(totalRows int) {
 	if totalRows <= 0 {
 		return
@@ -178,7 +178,7 @@ func (ts *TableState) Next(totalRows int) {
 	ts.selectionDirty = true
 }
 
-// Prev, seçimi bir önceki satıra taşır.
+// Prev moves the selection to the previous row.
 func (ts *TableState) Prev() {
 	if ts.Selected > 0 {
 		ts.Selected--
@@ -304,7 +304,7 @@ type TableDataSource interface {
 	RowAt(index int) TableRow
 }
 
-// Table, interaktif, esnek sütunlu, dikey kaydırılabilir ve hücre birleştirme destekli tablo bileşenidir.
+// Table is an interactive table with flexible columns, vertical scrolling and cell spanning.
 type Table struct {
 	ID            string
 	Header        *TableRow
@@ -316,12 +316,12 @@ type Table struct {
 	SelectedStyle cell.Style
 	FocusedStyle  cell.Style
 	DrawGrid      bool
-	SortEnabled   bool                                              // Başlık hücrelerine tıklayarak satır sıralamayı etkinleştirir.
-	MultiSelect   bool                                              // Space ile birden fazla satırın seçilmesini etkinleştirir.
-	FilterQuery   string                                            // Fuzzy filtre sorgusu; boşsa tüm satırlar çizilir.
-	CellStyle     func(row, column int, value TableCell) cell.Style // Hücre bazlı stil kuralı.
-	StickyColumns int                                               // Soldan sabit kalacak sütun sayısı.
-	Scrollbar     bool                                              // Sağ kenarda dikey kaydırma çubuğu çizer.
+	SortEnabled   bool                                              // Enables sorting rows by clicking the header cells.
+	MultiSelect   bool                                              // Enables selecting several rows with Space.
+	FilterQuery   string                                            // Fuzzy filter query; when empty, every row is drawn.
+	CellStyle     func(row, column int, value TableCell) cell.Style // Per-cell style rule.
+	StickyColumns int                                               // Number of columns frozen on the left.
+	Scrollbar     bool                                              // Draws a vertical scrollbar on the right edge.
 }
 
 // NewTable creates a new Table with default grid enabled.
@@ -441,7 +441,7 @@ func (t Table) columnX(area cell.Rect, widths []uint16, column int) uint16 {
 	return x - offset
 }
 
-// SolveWidths, toplam kullanılabilir tablo genişliğini sütun kurallarına göre çözerek genişlikleri belirler.
+// SolveWidths solves the column rules against the total usable table width and sets the widths.
 func SolveWidths(totalWidth uint16, constraints []TableConstraint) []uint16 {
 	return solveWidthsInto(nil, totalWidth, constraints)
 }
@@ -458,7 +458,7 @@ func solveWidthsInto(widths []uint16, totalWidth uint16, constraints []TableCons
 	var usedWidth uint16
 	var fillCount int
 
-	// 1. Geçiş: Sabit ve Yüzdelik sütunları çöz
+	// Pass 1: solve the Fixed and Percentage columns
 	for i, c := range constraints {
 		switch c.Type {
 		case ConstraintFixed:
@@ -473,7 +473,7 @@ func solveWidthsInto(widths []uint16, totalWidth uint16, constraints []TableCons
 		}
 	}
 
-	// 2. Geçiş: Kalan boşluğu Fill sütunlarına paylaştır
+	// Pass 2: share the remaining space among the Fill columns
 	if fillCount > 0 && totalWidth > usedWidth {
 		remaining := totalWidth - usedWidth
 		fillW := remaining / uint16(fillCount)
@@ -500,7 +500,7 @@ func getOwnerCell(owner map[[2]int][2]int, r, c int) [2]int {
 	return [2]int{r, c}
 }
 
-// Draw, tabloyu render eder, başlığı yazar, satırları kaydırma offsetine göre dizer ve ızgara çizgilerini çizer.
+// Draw renders the table: it writes the header, lays out the rows by the scroll offset and draws the grid lines.
 func (t Table) Draw(ctx cell.Context, buf *buffer.Buffer) {
 	if ctx.Area.Width == 0 || ctx.Area.Height == 0 {
 		return
@@ -544,12 +544,12 @@ func (t Table) Draw(ctx cell.Context, buf *buffer.Buffer) {
 		sortTableRows(t.Rows, t.State.SortColumn, t.State.SortDescending)
 	}
 
-	// Odaklanabilir olarak kaydet
+	// Register as focusable
 	if t.ID != "" && ctx.RegisterFocus != nil {
 		ctx.RegisterFocus(t.ID)
 	}
 
-	// 1. SATIR SAYISININ VE FİLTRENİN HESAPLANMASI
+	// 1. WORK OUT THE ROW COUNT AND THE FILTER
 	rows := t.Rows
 	rowCount := len(rows)
 	if t.DataSource != nil {
@@ -576,7 +576,7 @@ func (t Table) Draw(ctx cell.Context, buf *buffer.Buffer) {
 		rowCount = len(rows)
 	}
 
-	// 2. SCROLLBAR TALEBİNİN VE ALAN GENİŞLİĞİNİN HESAPLANMASI
+	// 2. WORK OUT WHETHER A SCROLLBAR IS NEEDED AND THE AREA WIDTH
 	visibleRows := int(ctx.Area.Height)
 	if t.Header != nil {
 		visibleRows--
@@ -594,10 +594,10 @@ func (t Table) Draw(ctx cell.Context, buf *buffer.Buffer) {
 		ctx.Area.Width--
 	}
 
-	// 3. SÜTUN GENİŞLİKLERİNİN HESAPLANMASI VE İLKLENDİRİLMESİ
+	// 3. WORK OUT AND INITIALISE THE COLUMN WIDTHS
 	colsCount := len(t.Constraints)
 	netWidth := ctx.Area.Width
-	// Izgara çizgileri çiziliyorsa, her sütun arası için 1 karakterlik boşluğu düş
+	// If grid lines are drawn, subtract 1 character between each pair of columns
 	if t.DrawGrid && colsCount > 1 {
 		if netWidth > uint16(colsCount-1) {
 			netWidth -= uint16(colsCount - 1)
@@ -608,7 +608,7 @@ func (t Table) Draw(ctx cell.Context, buf *buffer.Buffer) {
 
 	var widths []uint16
 	if t.State != nil {
-		// Sütun genişliklerini sakla ve ekran boyutu değiştiyse yeniden hesapla
+		// Keep the column widths, and solve them again if the screen size changed
 		var totalStoredWidth uint16
 		for _, w := range t.State.ColumnWidths {
 			totalStoredWidth += w
@@ -645,13 +645,13 @@ func (t Table) Draw(ctx cell.Context, buf *buffer.Buffer) {
 		t.registerSortHandlers(ctx, widths, colsCount)
 	}
 
-	// 3. SAHİPLİK MATRİSİNİN (COLSPAN / ROWSPAN) HESAPLANMASI
+	// 3. WORK OUT THE OWNERSHIP MATRIX (COLSPAN / ROWSPAN)
 	owner := scratch.owner
 	clear(owner)
 	cellsMap := scratch.cells
 	clear(cellsMap)
 
-	// Header satırını (row -1) matrise işle
+	// Put the header row (row -1) into the matrix
 	if t.Header != nil {
 		cellIdx := 0
 		for colIdx := 0; colIdx < colsCount; {
@@ -692,7 +692,7 @@ func (t Table) Draw(ctx cell.Context, buf *buffer.Buffer) {
 		}
 	}
 
-	// Body satırlarını matrise işle (satır kırpma optimizasyonu ile)
+	// Put the body rows into the matrix (skipping rows out of view)
 	offset := 0
 	if t.State != nil {
 		offset = t.State.Offset
@@ -740,7 +740,7 @@ func (t Table) Draw(ctx cell.Context, buf *buffer.Buffer) {
 		}
 	}
 
-	// 4. BAŞLIK ÇİZİMİ
+	// 4. DRAW THE HEADER
 	currY := ctx.Area.Y
 	gridStyle := ctx.Style.Merge(t.GridStyle)
 
@@ -748,7 +748,7 @@ func (t Table) Draw(ctx cell.Context, buf *buffer.Buffer) {
 		t.drawSpanRow(ctx, buf, currY, -1, widths, false, owner, cellsMap, gridStyle, t.Header.Style)
 		currY++
 
-		// Başlık altı ayırıcı çizgi
+		// Separator line under the header
 		if currY < ctx.Area.Y+ctx.Area.Height {
 			targetBodyRow := 0
 			if t.State != nil {
@@ -756,7 +756,7 @@ func (t Table) Draw(ctx cell.Context, buf *buffer.Buffer) {
 			}
 
 			for i, w := range widths {
-				// Yatay çizginin birleştirilmiş hücre tarafından örtülüp örtülmediğini denetle
+				// Check whether a spanned cell covers the horizontal line
 				sepCovered := getOwnerCell(owner, -1, i) == getOwnerCell(owner, targetBodyRow, i)
 				startX := t.columnX(ctx.Area, widths, i)
 
@@ -779,7 +779,7 @@ func (t Table) Draw(ctx cell.Context, buf *buffer.Buffer) {
 				}
 
 				if t.DrawGrid && i < colsCount-1 {
-					// Dikey ve yatay çizgilerin birleştiği kesişim karakterini seç
+					// Pick the junction character where vertical and horizontal lines meet
 					up := getOwnerCell(owner, -1, i) != getOwnerCell(owner, -1, i+1)
 					down := getOwnerCell(owner, targetBodyRow, i) != getOwnerCell(owner, targetBodyRow, i+1)
 					left := getOwnerCell(owner, -1, i) != getOwnerCell(owner, targetBodyRow, i)
@@ -808,7 +808,7 @@ func (t Table) Draw(ctx cell.Context, buf *buffer.Buffer) {
 		}
 	}
 
-	// 5. SATIR SCROLL HESAPLAMALARI
+	// 5. ROW SCROLL CALCULATIONS
 	if currY >= ctx.Area.Y+ctx.Area.Height {
 		return
 	}
@@ -839,16 +839,16 @@ func (t Table) Draw(ctx cell.Context, buf *buffer.Buffer) {
 		t.State.selectionDirty = false
 	}
 
-	// 6. SATIRLARIN ÇİZİLMESİ
+	// 6. DRAW THE ROWS
 	drawOffset := 0
 	if t.State != nil {
 		drawOffset = t.State.Offset
 	}
 	rowsStartY := currY
 	drawnRows := uint16(0)
-	// Satır başına closure kaydı yapmak, görünür her satır için heap tahsisatı
-	// yaratır. Bunun yerine tüm satır bloğu tek bir fare bölgesiyle kaydedilir ve
-	// hedef satır indeksi olay koordinatından hesaplanır.
+	// Registering a closure per row would allocate on the heap for every visible
+	// row. Instead the whole block of rows is registered as one mouse region, and
+	// the target row index is worked out from the event's coordinates.
 	perRowClick := ctx.RegisterMouse == nil && ctx.RegisterClick != nil
 	if t.State != nil {
 		t.State.rowNodes = t.State.rowNodes[:0]
@@ -890,7 +890,7 @@ func (t Table) Draw(ctx cell.Context, buf *buffer.Buffer) {
 		t.registerRowsBlockHandler(ctx, cell.NewRect(ctx.Area.X, rowsStartY, ctx.Area.Width, drawnRows), rowsStartY, drawOffset, totalRows, rowCount)
 	}
 
-	// Scrollbar Çizimi
+	// Draw the scrollbar
 	if drawScrollbar {
 		scrollbarX := ctx.Area.X + ctx.Area.Width
 		scrollbarH := int(ctx.Area.Height)
@@ -936,7 +936,7 @@ func (t Table) registerScrollHandlers(ctx cell.Context, rowCount int) {
 	ctx.RegisterMouse(ctx.Area, t.State.scrollHandler)
 }
 
-// applyScroll, fare tekerleği olaylarını dikey/yatay kaydırmaya çevirir.
+// applyScroll turns mouse wheel events into vertical/horizontal scrolling.
 func (t Table) applyScroll(ev driver.MouseEvent, rowCount, viewportHeight int) {
 	if t.State == nil {
 		return
@@ -944,9 +944,9 @@ func (t Table) applyScroll(ev driver.MouseEvent, rowCount, viewportHeight int) {
 	t.State.handleScroll(ev, rowCount, viewportHeight)
 }
 
-// registerRowsBlockHandler, görünür satırların tamamını tek bir fare bölgesi olarak kaydeder.
-// Hedef satır, olayın Y koordinatı ile çizim anındaki kaydırma konumundan hesaplanır;
-// böylece satır sayısıyla ölçeklenen closure tahsisatı ortadan kalkar.
+// registerRowsBlockHandler registers all the visible rows as a single mouse region.
+// The target row is worked out from the event's Y coordinate and the scroll position at draw time,
+// which removes the closure allocations that grew with the number of rows.
 func (t Table) registerRowsBlockHandler(ctx cell.Context, rowsArea cell.Rect, rowsStartY uint16, drawOffset, totalRows, rowCount int) {
 	if ctx.RegisterMouse == nil {
 		return
@@ -1062,7 +1062,7 @@ func (t Table) registerRowClickHandler(ctx cell.Context, rowArea cell.Rect, targ
 	})
 }
 
-// drawSpanRow, birleştirilmiş hücrelere duyarlı olarak tek bir tablo satırını çizdirir.
+// drawSpanRow draws a single table row, taking spanned cells into account.
 func (t Table) drawSpanRow(
 	ctx cell.Context,
 	buf *buffer.Buffer,
@@ -1115,11 +1115,11 @@ func (t Table) drawSpanRow(
 			}
 		}
 
-		// Eğer bu hücre üstteki veya soldaki birleştirilmiş bir hücrenin alt parçasıysa çizimi atla
+		// Skip drawing if this cell is part of a spanned cell above or to the left
 		if ownerCoords != [2]int{r, colIdx} {
 			if t.DrawGrid && colIdx < colsCount-1 {
 				currX = t.columnX(ctx.Area, widths, colIdx+1)
-				// Sınır çizgisi hücre birleştirme alanı içinde kalmıyorsa çiz
+				// Draw the border line unless it lies inside a spanned area
 				if getOwnerCell(owner, r, colIdx) != getOwnerCell(owner, r, colIdx+1) {
 					separatorX := currX - 1
 					// Clip the vertical grid line separator
@@ -1140,7 +1140,7 @@ func (t Table) drawSpanRow(
 			continue
 		}
 
-		// Bu hücre birleştirilmiş alanın başlangıç (ana) hücresidir
+		// This cell is the start (owner) cell of a spanned area
 		cellVal := cellsMap[[2]int{r, colIdx}]
 		cellStyle := rowStyle.Merge(cellVal.Style)
 		if t.CellStyle != nil {
@@ -1156,7 +1156,7 @@ func (t Table) drawSpanRow(
 			rowSpan = 1
 		}
 
-		// Birleşik hücrenin toplam karakter genişliğini hesapla (komşu sütunlar + aralarındaki ızgaralar)
+		// Work out the spanned cell's total width in characters (neighbouring columns + the grid lines between them)
 		cellW := uint16(0)
 		for c := 0; c < colSpan && colIdx+c < colsCount; c++ {
 			cellW += widths[colIdx+c]
@@ -1165,7 +1165,7 @@ func (t Table) drawSpanRow(
 			}
 		}
 
-		// Hücre arka planını doldur (dikey rowSpan kadar satıra ve cellW genişliğine yayılır)
+		// Fill the cell background (across rowSpan rows and cellW columns)
 		for dy := 0; dy < rowSpan; dy++ {
 			drawY := y + uint16(dy)
 			if drawY >= ctx.Area.Y+ctx.Area.Height {
@@ -1179,7 +1179,7 @@ func (t Table) drawSpanRow(
 			}
 		}
 
-		// Metni keserek sadece ilk satıra yazdır (top-left) - clipping-aware
+		// Cut the text and write it on the first row only (top-left) - clipping-aware.
 		// Cut at a cluster boundary and draw the "..." separately, so a cell
 		// that does not fit costs no allocation.
 		if text := cellVal.Text; cell.StringWidth(text) <= int(cellW) {
@@ -1193,7 +1193,7 @@ func (t Table) drawSpanRow(
 			drawTextClipped(buf, currX+uint16(w), y, "...", cellStyle, clipLeft, clipRight)
 		}
 
-		// Sütunlar arası dikey ızgara çizgisini çiz (birleştirilmiş alanın dışındaysa)
+		// Draw the vertical grid line between columns (if outside the spanned area)
 		if t.DrawGrid && colIdx < colsCount-1 {
 			separatorX := t.columnX(ctx.Area, widths, colIdx+1) - 1
 			// Clip the separator
@@ -1299,7 +1299,7 @@ func numericTableValue(value string) (float64, bool) {
 	return parsed, err == nil
 }
 
-// SizeHint, tablonun esnek yerleşim ihtiyacını belirtir.
+// SizeHint reports the table's flexible layout needs.
 func (t Table) SizeHint(maxArea cell.Rect) (width, height uint16) {
 	return maxArea.Width, maxArea.Height
 }
@@ -1361,7 +1361,7 @@ func setEllipsized(buf *buffer.Buffer, x, y uint16, s string, style cell.Style, 
 	return n + buf.SetStringWithin(x+n, y, suffix, style, uint16(sw))
 }
 
-// getIntersectionChar, etrafındaki etkin çizgilerin durumuna göre doğru ızgara kavşak karakterini seçer.
+// getIntersectionChar picks the right grid junction character from the lines around it.
 func getIntersectionChar(up, down, left, right bool) rune {
 	if up && down && left && right {
 		return '┼'

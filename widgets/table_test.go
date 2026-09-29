@@ -20,7 +20,7 @@ func TestTableWidthSolver(t *testing.T) {
 		t.Fatalf("SolveWidths length = %d; 3 bekleniyordu", len(widths))
 	}
 
-	// 100 genişliğinde:
+	// At a width of 100:
 	// Fixed 10 -> 10
 	// Percentage 50 -> 50
 	// Fill -> 100 - (10 + 50) = 40
@@ -56,7 +56,7 @@ func TestTableStateNavigation(t *testing.T) {
 		t.Errorf("Selected after Prev() = %d; 0 bekleniyordu", state.Selected)
 	}
 
-	// Sınır koruma (min index 0)
+	// Bounds guard (min index 0)
 	state.Prev()
 	if state.Selected != 0 {
 		t.Errorf("Selected after Prev() boundary = %d; 0 bekleniyordu", state.Selected)

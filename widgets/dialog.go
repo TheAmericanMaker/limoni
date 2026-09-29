@@ -465,7 +465,7 @@ func blendWithColor(orig cell.Color, target cell.Color, alpha float64) cell.Colo
 	return cell.NewColorRGB(r, g, b)
 }
 
-// displayWidth, karakterlerin terminaldeki görsel hücre genişliklerini hesaplar.
+// displayWidth works out the width of characters in terminal cells.
 func displayWidth(s string) int {
 	width := 0
 	for len(s) > 0 {
@@ -479,12 +479,12 @@ func displayWidth(s string) int {
 	return width
 }
 
-// SizeHint, diyalog bileşeninin esnek boyutlu çizilmesini bildirir.
+// SizeHint tells the layout the dialog is drawn at a flexible size.
 func (di Dialog) SizeHint(maxArea cell.Rect) (width, height uint16) {
 	return maxArea.Width, maxArea.Height
 }
 
-// splitMessage, uzun mesajları kutu genişliğine göre alt satırlara böler.
+// splitMessage breaks long messages into lines that fit the box width.
 func splitMessage(msg string, maxW int) []string {
 	if maxW <= 0 {
 		return []string{msg}

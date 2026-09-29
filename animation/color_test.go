@@ -20,7 +20,7 @@ func TestColorAnimationRGB(t *testing.T) {
 	now := time.Now()
 	c.startTime = now
 
-	// 50ms sonra (yarı yolda) güncelle
+	// Update after 50ms (halfway)
 	c.Update(now.Add(50 * time.Millisecond))
 
 	r, g, b := c.Value().RGB()
@@ -28,7 +28,7 @@ func TestColorAnimationRGB(t *testing.T) {
 		t.Errorf("50ms sonra RGB: (%d, %d, %d); (150, 125, 125) bekleniyordu", r, g, b)
 	}
 
-	// 100ms sonra güncelle
+	// Update after 100ms
 	c.Update(now.Add(100 * time.Millisecond))
 	if c.Value() != c2 {
 		t.Errorf("Süre sonunda renk %v; %v bekleniyordu", c.Value(), c2)

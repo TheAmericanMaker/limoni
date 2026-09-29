@@ -1,6 +1,6 @@
-// Command widgetdocs, widgets paketindeki kaynak koddan docs/widget-gallery.md dosyasını üretir.
+// Command widgetdocs generates docs/widget-gallery.md from the source of the widgets package.
 //
-// Kullanım:
+// Usage:
 //
 //	go run ./internal/tools/widgetdocs -src widgets -out docs/widget-gallery.md
 package main

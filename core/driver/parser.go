@@ -4,23 +4,23 @@ import (
 	"unicode/utf8"
 )
 
-// ParseEvent gelen byte akışından tek bir TUI olayını ayrıştırır.
-// Çıktı olarak ayrıştırılan olay yapısını ve bu olay için tüketilen (consumed) byte sayısını döner.
-// Eğer tamponda eksik bir ANSI dizisi varsa tüketilen byte sayısı 0 döner; bu durumda daha fazla veri beklenmelidir.
+// ParseEvent parses a single TUI event from the incoming byte stream.
+// It returns the parsed event and the number of bytes it consumed.
+// If the buffer holds an incomplete ANSI sequence it consumes 0 bytes, and the caller should wait for more data.
 func ParseEvent(buf []byte) (Event, int) {
 	if len(buf) == 0 {
 		return Event{}, 0
 	}
 
-	// 1. Bir ANSI kaçış dizisi değilse, standart UTF-8 karakter vuruşudur
+	// 1. Not an ANSI escape sequence: a plain UTF-8 key press
 	if buf[0] != '\x1b' {
 		r, size := utf8.DecodeRune(buf)
 		if r == utf8.RuneError {
-			// Yarım kalan UTF-8 karakteri ise veri beklemeye devam et
+			// An incomplete UTF-8 character: keep waiting for data
 			if !utf8.FullRune(buf) {
 				return Event{}, 0
 			}
-			// Hatalı UTF-8 verisi, 1 byte tüketip geç
+			// Invalid UTF-8: consume 1 byte and move on
 			return Event{}, 1
 		}
 
@@ -38,7 +38,7 @@ func ParseEvent(buf []byte) (Event, int) {
 		case ' ':
 			ev.Key.Type = KeySpace
 		default:
-			// Ctrl karakterlerinin algılanması: ASCII 1-26 aralığı Ctrl-A ile Ctrl-Z'ye denk gelir.
+			// Ctrl characters: ASCII 1-26 map to Ctrl-A through Ctrl-Z.
 			if r >= 1 && r <= 26 {
 				ev.Key.Type = KeyRune
 				ev.Key.Ch = rune('a' + r - 1)
@@ -51,15 +51,15 @@ func ParseEvent(buf []byte) (Event, int) {
 		return ev, size
 	}
 
-	// 2. Escape (\x1b) karakteri ile başlayan dizi kontrolü
+	// 2. Sequences starting with Escape (\x1b)
 	if len(buf) == 1 {
-		// Tamponda tek başına ESC var. CSI veya Alt dizisinin devam edip etmediğini
-		// anlamak için event loop zaman aşımını (escTimeoutDuration) beklemelidir.
+		// A lone ESC in the buffer. The event loop must wait for its timeout
+		// (escTimeoutDuration) to see whether a CSI or Alt sequence follows.
 		return Event{}, 0
 	}
 
 	switch buf[1] {
-	case '[': // CSI (Control Sequence Introducer) dizisi
+	case '[': // CSI (Control Sequence Introducer) sequence
 		return parseCSI(buf)
 	case 'O': // SS3 application cursor keys and F1-F4.
 		if len(buf) < 3 {
@@ -94,7 +94,7 @@ func ParseEvent(buf []byte) (Event, int) {
 	case '_', ']', 'P', '^': // APC (\x1b_), OSC (\x1b]), DCS (\x1bP), PM (\x1b^)
 		return parseStringSequence(buf)
 	default:
-		// ESC + Karakter kombinasyonu (Alt + Tuş)
+		// ESC + character (Alt + key)
 		r, size := utf8.DecodeRune(buf[1:])
 		if r == utf8.RuneError {
 			if !utf8.FullRune(buf[1:]) {
@@ -236,13 +236,13 @@ func parseCSI(buf []byte) (Event, int) {
 func csiKey(cmd byte, params []int) Event {
 	// Build the event from the final byte.
 	switch cmd {
-	case 'A': // Yukarı Ok
+	case 'A': // Up arrow
 		return makeKeyEvent(KeyArrowUp, params)
-	case 'B': // Aşağı Ok
+	case 'B': // Down arrow
 		return makeKeyEvent(KeyArrowDown, params)
-	case 'C': // Sağ Ok
+	case 'C': // Right arrow
 		return makeKeyEvent(KeyArrowRight, params)
-	case 'D': // Sol Ok
+	case 'D': // Left arrow
 		return makeKeyEvent(KeyArrowLeft, params)
 	case 'Z': // Shift+Tab (backtab)
 		return Event{Type: EventKey, Key: KeyEvent{Type: KeyTab, Shift: true}}
@@ -302,7 +302,7 @@ func csiKey(cmd byte, params []int) Event {
 		}
 		return Event{}
 	case '~':
-		// Keypad ve fonksiyon tuşları (\x1b[sayı~)
+		// Keypad and function keys (\x1b[number~)
 		if len(params) == 0 {
 			return Event{}
 		}
@@ -376,7 +376,7 @@ func csiKey(cmd byte, params []int) Event {
 	return Event{}
 }
 
-// makeKeyEvent tuş modifikatörlerini çözümler ve KeyEvent olayını döner.
+// makeKeyEvent decodes the key modifiers and returns the KeyEvent.
 func makeKeyEvent(kt KeyType, params []int) Event {
 	ev := Event{Type: EventKey}
 	ev.Key.Type = kt
@@ -388,7 +388,7 @@ func makeKeyEvent(kt KeyType, params []int) Event {
 	return ev
 }
 
-// decodeModifiers standart VT100/Xterm modifikatör kodlarını çözümler.
+// decodeModifiers decodes the standard VT100/xterm modifier codes.
 func decodeModifiers(code int) (shift, alt, ctrl bool) {
 	if code <= 1 {
 		return
@@ -458,7 +458,7 @@ func parseSGRMouse(raw []byte, cmd byte, consumed int) (Event, int) {
 
 	ev := Event{Type: EventMouse}
 
-	// 1-tabanlı terminal koordinatlarını 0-tabanlı koordinata dönüştür
+	// Convert 1-based terminal coordinates to 0-based ones
 	if mouseX > 0 {
 		ev.Mouse.X = uint16(mouseX - 1)
 	}
@@ -466,27 +466,27 @@ func parseSGRMouse(raw []byte, cmd byte, consumed int) (Event, int) {
 		ev.Mouse.Y = uint16(mouseY - 1)
 	}
 
-	// Modifikatör bitlerini kontrol et (Shift: 4, Alt: 8, Ctrl: 16)
+	// Check the modifier bits (Shift: 4, Alt: 8, Ctrl: 16)
 	ev.Mouse.Shift = (btnCode & 4) != 0
 	ev.Mouse.Alt = (btnCode & 8) != 0
 	ev.Mouse.Ctrl = (btnCode & 16) != 0
 
-	// Modifikatör bitlerini temizleyerek butonu ve sürükleme bilgisini ayır
+	// Clear the modifier bits to separate the button and the drag flag
 	btnRaw := btnCode & ^(4 | 8 | 16)
 	isMotion := (btnRaw & 32) != 0
 	btnBase := btnRaw & ^32
 
 	if cmd == 'm' {
-		// Tuş bırakma olayı
+		// Key release event
 		ev.Mouse.Button = MouseRelease
 		ev.Mouse.Drag = false
 	} else if isMotion {
 		if btnBase == 3 {
-			// Butonsuz hareket (pure hover / pointer motion)
+			// Motion without buttons (pure hover / pointer motion)
 			ev.Mouse.Button = MouseNone
 			ev.Mouse.Drag = false
 		} else {
-			// Butona basılıyken hareket (gerçek sürükleme / Drag)
+			// Motion with a button held (a real drag)
 			ev.Mouse.Drag = true
 			switch btnBase {
 			case 0:

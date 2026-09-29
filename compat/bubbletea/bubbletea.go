@@ -272,8 +272,8 @@ func (p *Program) Run(ctx context.Context) error {
 	return p.prog.Run(ctx)
 }
 
-// RunTerminal, modeli gerçek terminale (stdin/stdout) bağlayarak çalıştırır.
-// Backend kurulumu, olay döngüsü ve kare çizimi Limoni runtime'ı tarafından yönetilir.
+// RunTerminal runs the model attached to the real terminal (stdin/stdout).
+// Backend setup, the event loop and frame drawing are handled by the Limoni runtime.
 func (p *Program) RunTerminal(ctx context.Context) error {
 	if p.prog == nil {
 		return nil

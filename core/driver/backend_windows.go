@@ -12,7 +12,7 @@ import (
 	"golang.org/x/sys/windows"
 )
 
-// Backend Windows platformunda konsol I/O, Raw mode ve event döngüsünü yönetir.
+// Backend manages console I/O, raw mode and the event loop on Windows.
 type Backend struct {
 	in           *os.File
 	out          *os.File
@@ -31,7 +31,7 @@ type Backend struct {
 	looping      atomic.Bool
 }
 
-// NewBackend yeni bir Windows Backend örneği oluşturur.
+// NewBackend returns a new Windows Backend.
 func NewBackend(in, out *os.File) *Backend {
 	return &Backend{
 		in:     in,
@@ -41,7 +41,7 @@ func NewBackend(in, out *os.File) *Backend {
 	}
 }
 
-// NewPortableBackend yeni bir taşınabilir/uzaktan bağlantı Backend örneği oluşturur.
+// NewPortableBackend returns a new portable (remote connection) Backend.
 func NewPortableBackend(io TerminalIO) *Backend {
 	w, h, _ := io.Size()
 	if w == 0 || h == 0 {
@@ -73,7 +73,7 @@ func (b *Backend) SetSize(w, h uint16) {
 	}
 }
 
-// Setup terminali Raw / VT100 moduna geçirir ve ekran hazırlık kodlarını gönderir.
+// Setup switches the terminal to raw / VT100 mode and sends the screen setup codes.
 func (b *Backend) Setup() error {
 	if b.portableIO != nil {
 		setupCmds := fullScreenSetupCmds()
@@ -104,7 +104,7 @@ func (b *Backend) Setup() error {
 	return nil
 }
 
-// Close terminali eski ayarlarına döndürür ve alternatif ekrandan çıkar.
+// Close restores the terminal's previous settings and leaves the alternate screen.
 func (b *Backend) Close() error {
 	b.closeOnce.Do(func() {
 		// Let answers to the startup queries arrive before the console is
@@ -137,12 +137,12 @@ func (b *Backend) Close() error {
 	return b.closeErr
 }
 
-// Events olay akışını dinleyen kanal alıcısını döner.
+// Events returns the channel that delivers events.
 func (b *Backend) Events() <-chan Event {
 	return b.events
 }
 
-// StartEventLoop Windows konsolunda girdi ve olay döngüsünü başlatır.
+// StartEventLoop starts the input and event loop on the Windows console.
 func (b *Backend) StartEventLoop() {
 	b.startOnce.Do(func() {
 		b.looping.Store(true)
@@ -185,7 +185,7 @@ func (b *Backend) startEventLoop() {
 		var escTimer *time.Timer
 		var escTimerChan <-chan time.Time
 
-		// Periyodik pencere boyutu kontrolü (Windows için)
+		// Poll the window size periodically (Windows only)
 		ticker := time.NewTicker(200 * time.Millisecond)
 		defer ticker.Stop()
 
@@ -263,7 +263,7 @@ func (b *Backend) startEventLoop() {
 	}()
 }
 
-// Size konsol tamponu boyutunu döner.
+// Size returns the size of the console buffer.
 func (b *Backend) Size() (uint16, uint16, error) {
 	if b.portableIO != nil {
 		w, h, err := b.portableIO.Size()
@@ -291,12 +291,12 @@ func (b *Backend) Size() (uint16, uint16, error) {
 	return w, h, nil
 }
 
-// CellPixelSize hücresel piksel boyutunu döner (Windows varsayılanı).
+// CellPixelSize returns the pixel size of a cell (the Windows default).
 func (b *Backend) CellPixelSize() (uint16, uint16, error) {
 	return 10, 20, nil
 }
 
-// Write doğrudan konsola yazar.
+// Write writes straight to the console.
 func (b *Backend) Write(p []byte) (int, error) {
 	if b.portableIO != nil {
 		return b.portableIO.Write(p)
@@ -307,7 +307,7 @@ func (b *Backend) Write(p []byte) (int, error) {
 	return 0, nil
 }
 
-// StartSyncUpdate senkron güncellemeyi başlatır (\x1b[?2026h).
+// StartSyncUpdate begins a synchronised update (\x1b[?2026h).
 func (b *Backend) StartSyncUpdate() {
 	if b.portableIO != nil {
 		_, _ = b.portableIO.Write([]byte("\x1b[?2026h"))
@@ -318,7 +318,7 @@ func (b *Backend) StartSyncUpdate() {
 	}
 }
 
-// EndSyncUpdate senkron güncellemeyi kapatır (\x1b[?2026l).
+// EndSyncUpdate ends the synchronised update (\x1b[?2026l).
 func (b *Backend) EndSyncUpdate() {
 	if b.portableIO != nil {
 		_, _ = b.portableIO.Write([]byte("\x1b[?2026l"))

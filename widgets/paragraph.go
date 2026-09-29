@@ -9,18 +9,18 @@ import (
 	"github.com/thebanri/limoni/layout"
 )
 
-// Paragraph, çok satırlı metinleri gösteren görsel bileşendir.
-// Metinlerin alan sınırlarına göre otomatik kelime kelime aşağı kaydırılmasını (Word Wrap) destekler.
+// Paragraph shows multi-line text.
+// It supports wrapping the text word by word to the area's bounds (word wrap).
 type Paragraph struct {
-	// ID, widget odak kimliğidir.
+	// ID is the widget's focus ID.
 	ID string
-	// Text, gösterilecek olan metin içeriğidir. Yeni satır (\n) karakterlerini destekler.
+	// Text is the text to show. It supports newlines (\n).
 	Text string
-	// Style, metnin yazı rengi, arka planı ve modifikatör stillerini belirler.
+	// Style sets the text's colour, background and modifiers.
 	Style cell.Style
-	// FocusedStyle, paragraf odaklandığında uygulanacak stildir.
+	// FocusedStyle is the style applied when the paragraph is focused.
 	FocusedStyle cell.Style
-	// Wrap, metnin sınır genişliğine göre otomatik olarak alt satıra kaydırılıp kaydırılmayacağını belirler.
+	// Wrap sets whether the text wraps to the next line at the bounds' width.
 	Wrap bool
 
 	// Caching fields to avoid heap allocation on draw loops
@@ -62,7 +62,7 @@ func (p *Paragraph) WithID(id string) *Paragraph {
 	return p
 }
 
-// Draw, metni çözümler, gerekliyse satır genişliğine göre böler ve terminal tamponuna çizer.
+// Draw lays out the text, splits it to the line width if needed, and draws it into the terminal buffer.
 func (p *Paragraph) Draw(ctx cell.Context, buf *buffer.Buffer) {
 	area := ctx.Area
 	if area.Width == 0 || area.Height == 0 {
@@ -88,7 +88,7 @@ func (p *Paragraph) Draw(ctx cell.Context, buf *buffer.Buffer) {
 		mergedStyle = mergedStyle.Merge(p.FocusedStyle)
 	}
 
-	// Metni satırlara ayır ve önbelleğe al
+	// Split the text into lines and cache them
 	if p.Text != p.lastText || area.Width != p.lastWidth || p.Wrap != p.lastWrap || p.cachedLines == nil {
 		p.lastText = p.Text
 		p.lastWidth = area.Width
@@ -105,7 +105,7 @@ func (p *Paragraph) Draw(ctx cell.Context, buf *buffer.Buffer) {
 		bg = ctx.Style.Bg
 	}
 
-	// Sınır yüksekliğini aşmayacak şekilde satır satır çiz
+	// Draw line by line without going past the bounds' height
 	for i, line := range p.cachedLines {
 		if uint16(i) >= area.Height {
 			break
@@ -134,14 +134,14 @@ func (p *Paragraph) Draw(ctx cell.Context, buf *buffer.Buffer) {
 	}
 }
 
-// SizeHint, metnin kaplamak istediği en uygun genişlik ve yüksekliği raporlar.
-// Düzen Pazarlığı: Eğer Wrap aktifse, verilen genişliğe (maxArea.Width) göre metnin kaç satır tutacağını hesaplar.
+// SizeHint reports the width and height the text would like.
+// Layout negotiation: if Wrap is on, it works out how many lines the text takes at the given width (maxArea.Width).
 func (p *Paragraph) SizeHint(maxArea cell.Rect) (width, height uint16) {
 	if len(p.Text) == 0 {
 		return 0, 0
 	}
 
-	// Metni satırlara ayır ve önbelleğe al
+	// Split the text into lines and cache them
 	if p.Text != p.lastText || maxArea.Width != p.lastWidth || p.Wrap != p.lastWrap || p.cachedLines == nil {
 		p.lastText = p.Text
 		p.lastWidth = maxArea.Width
@@ -153,7 +153,7 @@ func (p *Paragraph) SizeHint(maxArea cell.Rect) (width, height uint16) {
 		}
 	}
 
-	// En uzun satırın genişliğini bul
+	// Find the width of the longest line
 	maxW := 0
 	for _, line := range p.cachedLines {
 		if width := cell.StringWidth(line); width > maxW {
@@ -164,7 +164,7 @@ func (p *Paragraph) SizeHint(maxArea cell.Rect) (width, height uint16) {
 	w := uint16(maxW)
 	h := uint16(len(p.cachedLines))
 
-	// Üst sınırları aşma
+	// Do not exceed the bounds
 	if w > maxArea.Width {
 		w = maxArea.Width
 	}
@@ -187,7 +187,7 @@ func (p *Paragraph) Measure(maxArea cell.Rect) layout.Measure {
 	}
 }
 
-// wrapText, uzun bir metni kelime sınırlarından bölerek satır genişliğini (width) aşmayacak şekilde satırlara ayırır.
+// wrapText splits a long text at word boundaries into lines no wider than width.
 func wrapText(text string, width uint16) []string {
 	if width == 0 {
 		return nil
@@ -207,7 +207,7 @@ func wrapText(text string, width uint16) []string {
 
 		for _, word := range words {
 			wordW := cell.StringWidth(word)
-			// Kelimenin kendisi tek başına satır genişliğini aşıyorsa, kelimeyi harf harf böl
+			// If a word alone is wider than the line, split it character by character
 			if wordW > int(width) {
 				chunks := breakWord(word, int(width))
 				for _, chunk := range chunks {
@@ -265,7 +265,7 @@ func breakWord(word string, width int) []string {
 	return chunks
 }
 
-// splitLines, metni yeni satır (\n) karakterine göre ham satırlara ayırır (Windows \r\n dahil temizlenir).
+// splitLines splits the text into raw lines at newlines (\n) (Windows \r\n is cleaned up too).
 func splitLines(text string) []string {
 	var lines []string
 	start := 0
@@ -289,7 +289,7 @@ func splitLines(text string) []string {
 	return lines
 }
 
-// splitWords, bir satırı boşluk karakterlerine göre kelimelere böler.
+// splitWords splits a line into words at whitespace.
 func splitWords(s string) []string {
 	var words []string
 	start := -1

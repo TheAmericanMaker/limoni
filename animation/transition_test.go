@@ -32,7 +32,7 @@ func TestApplyDitherFade(t *testing.T) {
 		}
 	}
 
-	// Test progress = 0.5: glyph içeren satırlar bütün olarak geçer
+	// Test progress = 0.5: rows with glyphs transition as a whole
 	testBuf2 := buffer.NewBuffer(cell.NewRect(0, 0, 4, 4))
 	copy(testBuf2.Content, newBuf.Content)
 	ApplyDitherFade(testBuf2, oldBuf, 0.5)
@@ -47,7 +47,7 @@ func TestApplyDitherFade(t *testing.T) {
 		}
 	}
 
-	// Dört satırın iki tanesi eski, iki tanesi yeni frame'de kalmalı.
+	// Two of the four rows should still show the old frame and two the new one.
 	if countA != 8 || countB != 8 {
 		t.Errorf("Expected 8 'A's and 8 'B's at progress 0.5, got %d 'A's and %d 'B's", countA, countB)
 	}

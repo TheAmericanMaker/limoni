@@ -12,7 +12,7 @@ func main() {
 	inputState.SetValue("Örnek Türkçe Metin 🇹🇷")
 
 	err := limoni.Run(func(f *limoni.Frame, ev *limoni.Event) bool {
-		// Tuş kontrolleri
+		// Key handling
 		if ev != nil && ev.Type == limoni.EventKey {
 			switch ev.Key.Type {
 			case limoni.KeyEsc:
@@ -28,14 +28,14 @@ func main() {
 
 		area := f.Area()
 
-		// 1. Ekranı dikey olarak Başlık (3), Gövde (kalan) ve Alt Bilgi (3) olarak böl
+		// 1. Split the screen vertically into Header (3), Body (the rest) and Footer (3)
 		rows := limoni.SplitVertical(area,
 			limoni.Fixed(3),
 			limoni.Fill(),
 			limoni.Fixed(3),
 		)
 
-		// Başlık Paneli
+		// Header panel
 		header := limoni.NewBlock().
 			WithTitle("🍋 Limoni TUI - Yeni Basit ve Güçlü API 🚀").
 			WithTitleAlign(limoni.AlignCenter).
@@ -46,13 +46,13 @@ func main() {
 			)
 		f.RenderWidget(header, rows[0])
 
-		// Gövdeyi yatay olarak Sol (35%) ve Sağ (65%) sütunlara böl
+		// Split the body horizontally into Left (35%) and Right (65%) columns
 		cols := limoni.SplitHorizontal(rows[1],
 			limoni.Percentage(35),
 			limoni.Percentage(65),
 		)
 
-		// Sol Sütun: Liste
+		// Left column: list
 		leftBlock := limoni.NewBlock().
 			WithTitle("📋 Görev Listesi").
 			WithTitleAlign(limoni.AlignLeft).
@@ -71,13 +71,13 @@ func main() {
 			)
 		f.RenderWidget(leftBlock, cols[0])
 
-		// Sağ Sütun: Tablo & Metin Girişi
+		// Right column: table and text input
 		rightRows := limoni.SplitVertical(cols[1],
 			limoni.Fill(),
 			limoni.Fixed(3),
 		)
 
-		// Tablo
+		// Table
 		tableBlock := limoni.NewBlock().
 			WithTitle("📊 Sistem Durumu ve Metrikler").
 			WithTitleAlign(limoni.AlignLeft).
@@ -93,7 +93,7 @@ func main() {
 			)
 		f.RenderWidget(tableBlock, rightRows[0])
 
-		// Metin Girişi
+		// Text input
 		inputBlock := limoni.NewBlock().
 			WithTitle("✏️ Metin Kutusu (Yazmayı Deneyin)").
 			WithBorderStyle(limoni.Fg(limoni.Hex("#FF5599"))).
@@ -105,7 +105,7 @@ func main() {
 			)
 		f.RenderWidget(inputBlock, rightRows[1])
 
-		// Alt Bilgi Paneli
+		// Footer panel
 		footer := limoni.NewBlock().
 			WithBorderStyle(limoni.Fg(limoni.Hex("#666666"))).
 			WithChild(

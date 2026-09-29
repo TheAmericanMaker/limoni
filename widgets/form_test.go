@@ -14,7 +14,7 @@ func TestTextInputState(t *testing.T) {
 		t.Errorf("NewTextInputState.Value() = %q; boş metin bekleniyordu", state.Value())
 	}
 
-	// Karakter ekleme
+	// Insert character
 	state.HandleKey(driver.KeyEvent{Type: driver.KeyRune, Ch: 'a'})
 	state.HandleKey(driver.KeyEvent{Type: driver.KeyRune, Ch: 'b'})
 	if state.Value() != "ab" {
@@ -24,7 +24,7 @@ func TestTextInputState(t *testing.T) {
 		t.Errorf("Cursor = %d; 2 bekleniyordu", state.Cursor)
 	}
 
-	// Geri silme (Backspace)
+	// Backspace delete
 	state.HandleKey(driver.KeyEvent{Type: driver.KeyBackspace})
 	if state.Value() != "a" {
 		t.Errorf("Value() = %q; 'a' bekleniyordu", state.Value())
@@ -33,13 +33,13 @@ func TestTextInputState(t *testing.T) {
 		t.Errorf("Cursor = %d; 1 bekleniyordu", state.Cursor)
 	}
 
-	// Yön tuşuyla sola gitme
+	// Move left with the arrow key
 	state.HandleKey(driver.KeyEvent{Type: driver.KeyArrowLeft})
 	if state.Cursor != 0 {
 		t.Errorf("Cursor = %d; 0 bekleniyordu", state.Cursor)
 	}
 
-	// Araya karakter ekleme
+	// Insert character in the middle
 	state.HandleKey(driver.KeyEvent{Type: driver.KeyRune, Ch: 'z'})
 	if state.Value() != "za" {
 		t.Errorf("Value() = %q; 'za' bekleniyordu", state.Value())
@@ -48,8 +48,8 @@ func TestTextInputState(t *testing.T) {
 		t.Errorf("Cursor = %d; 1 bekleniyordu", state.Cursor)
 	}
 
-	// Delete tuşuyla sağdakini silme
-	state.Cursor = 0 // Başa al
+	// Delete the character to the right with Delete
+	state.Cursor = 0 // Go to the start
 	state.HandleKey(driver.KeyEvent{Type: driver.KeyDelete})
 	if state.Value() != "a" {
 		t.Errorf("Value() = %q; 'a' bekleniyordu", state.Value())
@@ -57,7 +57,7 @@ func TestTextInputState(t *testing.T) {
 }
 
 func TestCheckboxAndRadio(t *testing.T) {
-	// Checkbox toggle testi
+	// Checkbox toggle test
 	checked := false
 	cb := Checkbox{
 		ID:      "test_cb",
@@ -71,7 +71,7 @@ func TestCheckboxAndRadio(t *testing.T) {
 		t.Errorf("Checkbox.SizeHint() = (%d, %d); (10, 1) bekleniyordu", w, h)
 	}
 
-	// RadioButton seçimi
+	// RadioButton selection
 	selected := "OptionA"
 	rb := RadioButton{
 		ID:       "test_rb",

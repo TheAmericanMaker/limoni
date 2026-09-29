@@ -22,8 +22,8 @@ func newMouseTestTable(rowCount int) (widgets.Table, *widgets.TableState) {
 	}, state
 }
 
-// TestTableRowBlockClickSelectsRow, satır bloğu tek fare bölgesiyle kaydedildiğinde
-// tıklanan satırın doğru indeksle seçildiğini doğrular.
+// TestTableRowBlockClickSelectsRow checks that when the row block is registered as a
+// single mouse region, the clicked row is selected with the right index.
 func TestTableRowBlockClickSelectsRow(t *testing.T) {
 	table, state := newMouseTestTable(50)
 	term := NewTerminal(30, 10)
@@ -46,8 +46,8 @@ func TestTableRowBlockClickSelectsRow(t *testing.T) {
 	}
 }
 
-// TestTableRowBlockClickRespectsScrollOffset, kaydırma sonrası tıklamanın
-// görünür satır indeksine offset eklediğini doğrular.
+// TestTableRowBlockClickRespectsScrollOffset checks that after scrolling, a click
+// adds the offset to the visible row index.
 func TestTableRowBlockClickRespectsScrollOffset(t *testing.T) {
 	table, state := newMouseTestTable(50)
 	term := NewTerminal(30, 10)

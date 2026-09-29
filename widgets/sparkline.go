@@ -6,15 +6,15 @@ import (
 )
 
 type Sparkline struct {
-	// ID, widget odak kimliğidir.
+	// ID is the widget's focus ID.
 	ID string
-	// Data, çizilecek veri geçmişini temsil eden sayılar dizisidir.
+	// Data is the series of numbers to draw.
 	Data []float64
-	// Style, varsayılan hücre stilini tanımlar.
+	// Style is the default cell style.
 	Style cell.Style
-	// FocusedStyle, odaklandığında uygulanacak stildir.
+	// FocusedStyle is the style applied when focused.
 	FocusedStyle cell.Style
-	// Color, barların rengini belirler. Default ise stilin ön plan rengi kullanılır.
+	// Color sets the colour of the bars. Default uses the style's foreground colour.
 	Color cell.Color
 }
 
@@ -39,14 +39,14 @@ func (s Sparkline) Draw(ctx cell.Context, buf *buffer.Buffer) {
 		})
 	}
 
-	// En son N adet veriyi sütun genişliğine sığdır
+	// Fit the latest N values to the column width
 	limit := int(ctx.Area.Width)
 	data := s.Data
 	if len(data) > limit {
 		data = data[len(data)-limit:]
 	}
 
-	// Max değeri bul (sıfır bölme korumalı)
+	// Find the maximum (guarding against division by zero)
 	maxVal := 0.001
 	for _, val := range data {
 		if val > maxVal {
@@ -71,7 +71,7 @@ func (s Sparkline) Draw(ctx cell.Context, buf *buffer.Buffer) {
 			ratio = 1
 		}
 
-		// Hücre bazında tam bar yüksekliği ve kesir remainder hesabı
+		// Full bar height per cell and the fractional remainder
 		totalHeight := ratio * float64(ctx.Area.Height)
 		fullCells := int(totalHeight)
 		remainder := totalHeight - float64(fullCells)
@@ -95,7 +95,7 @@ func (s Sparkline) Draw(ctx cell.Context, buf *buffer.Buffer) {
 				}
 				c.Content = sparklineBlocks[blockIdx]
 			} else {
-				// Boş hücreleri temizle (önceki render kalıntılarını engellemek için)
+				// Clear the empty cells (so nothing is left over from the previous render)
 				c.Content = ' '
 			}
 		}

@@ -41,7 +41,7 @@ type MatrixStream struct {
 	Speed float64
 }
 
-// AppState, interaktif demo uygulamasının durumunu (state) temsil eder.
+// AppState is the state of the interactive demo application.
 func clampDialogOffset(screen cell.Rect, width, height uint16, offsetX, offsetY int) (int, int) {
 	centered := terminal.CenterRect(screen, width, height)
 	minX := -int(centered.X)
@@ -70,42 +70,42 @@ func clampDialogOffset(screen cell.Rect, width, height uint16, offsetX, offsetY 
 }
 
 type AppState struct {
-	// ActiveTab, sol menüde hangi sekmenin aktif olduğunu belirtir (örn. "Giriş", "Ayarlar").
+	// ActiveTab is the currently active tab.
 	ActiveTab string
-	// LastKey, klavyeden basılan son tuş bilgisini ekranda göstermek için saklar.
+	// LastKey keeps the last key pressed, to show it on screen.
 	LastKey string
-	// LastMouse, fare ile yapılan son eylemin (tıklama, hareket) bilgisini saklar.
+	// LastMouse keeps the last mouse action (click, motion).
 	LastMouse string
-	// ExitButtonArea, Çıkış butonunun ekrandaki koordinatlarını tutar.
+	// ExitButtonArea holds the screen coordinates of the Exit button.
 	ExitButtonArea cell.Rect
-	// SettingsListState, Ayarlar sekmesindeki listenin durumunu saklar.
+	// SettingsListState keeps the state of the list on the Settings tab.
 	SettingsListState *widgets.ListState
 
-	// PulseVal, vektör grafiğindeki dairenin boyutunu animate eder.
+	// PulseVal animates the size of the circle in the vector graphic.
 	PulseVal *animation.Float
-	// TabColors, menü butonlarının çerçeve renklerini anime eder.
+	// TabColors animates the frame colours of the menu buttons.
 	TabColors map[string]*animation.Color
-	// Canvas, çizim hafızasını korumak ve her karede yeni bellek ayırmamak için önbelleklenmiş Canvas bileşeni.
+	// Canvas is kept between frames so drawing reuses its memory instead of allocating every frame.
 	Canvas *widgets.Canvas
 
-	// Çift resim geçişli performans demosu için alanlar
+	// Fields for the two-image transition performance demo
 	TestImg1        image.Image
 	TestImg2        image.Image
 	ActiveImg       image.Image
 	LastImageToggle time.Time
 	UseImg2         bool
 
-	// Ayarlar sekmesindeki interaktif form durumları
+	// Interactive form state on the Settings tab
 	UsernameInputState *widgets.TextInputState
 	MouseModeChecked   bool
-	ThemeSelected      string // "Koyu", "Açık", "Renkli", "Yüksek Kontrast"
+	ThemeSelected      string // "Dark", "Light", "Colorful", "High Contrast"
 
-	// Çıkış onay diyalog durumu
+	// Exit confirmation dialog state
 	ShowExitDialog     bool
 	ExitDialogFinished bool
 	ExitDialogAnim     *animation.Float
 
-	// Giriş sekmesindeki interaktif tablo durumu
+	// Interactive table state on the Home tab
 	TableState          *widgets.TableState
 	TableFilterState    *widgets.TextInputState
 	DemoSliderState     *widgets.SliderState
@@ -124,28 +124,28 @@ type AppState struct {
 	LastProcessRead     time.Time
 	FormProgress        *animation.Float
 
-	// Açılır menü durumu
+	// Dropdown menu state
 	NotificationMode string
 	NotifPopupState  *widgets.PopupState
 
-	// Oyun alanı (Playground) durumları
+	// Playground state
 	PlaygroundDir    layout.Direction
 	PlaygroundRatio  int
 	PlaygroundBorder string
 	PlayShowGrid     bool
 	ProfileFrame     string
 
-	// Dither geçiş durumları
+	// Dither transition state
 	IsTransitioning     bool
 	TransitionStartTime time.Time
 
-	// Oyun alanı ek özellikleri (Matrix ve Sparkline)
+	// Extra playground features (Matrix and Sparkline)
 	PlaygroundMode   string
 	VirtualListState *widgets.ListState
 	MatrixStreams    []MatrixStream
 	CPUHistory       []float64
 
-	// Sürükleme ve Yardım Modali özellikleri
+	// Dragging and the help modal
 	ShowHelpDialog  bool
 	HelpDialogAnim  *animation.Float
 	IsDraggingModal bool
@@ -156,10 +156,10 @@ type AppState struct {
 	ModalDragBaseX  int
 	ModalDragBaseY  int
 
-	// Hata ayıklama modu
+	// Debug mode
 	DebugMode bool
 
-	// 3D Grafik Motoru özellikleri
+	// 3D graphics engine
 	RotX         float64
 	RotY         float64
 	RotZ         float64
@@ -170,21 +170,21 @@ type AppState struct {
 	ProfileImg   image.Image
 	OBJModel     *graphics.Model3D
 	OBJPath      string
-	ThreeDModel  string // "Küp", "Piramit", "Dörtyüzlü", "OBJ"
+	ThreeDModel  string // "Cube", "Pyramid", "Tetrahedron", "OBJ"
 	ThreeDStyle  string // "Dokulu", "Dolu Renkli", "Kafes"
 
-	// Pencere boyutlandırma (Resizing) özellikleri
+	// Window resizing
 	IsResizingModal  bool
 	ModalResizeBaseW int
 	ModalResizeBaseH int
 	HelpDialogW      int
 	HelpDialogH      int
 
-	// Komut Paleti ve Kısayol Yöneticisi
+	// Command palette and keybinding manager
 	CmdPalette *widgets.CommandPaletteState
 	KeyManager *widgets.KeybindingManager
 
-	// Referans sekmesi etkileşim sayaçları
+	// Interaction counters on the Reference tab
 	ReferenceRuntimeMessages      int
 	ReferenceInteractionLast      string
 	ReferenceLayoutPass           int
@@ -221,9 +221,9 @@ func recordReferenceInteraction(state *AppState, event string) {
 	}
 }
 
-// UpdateAnimations, zaman tabanlı animasyonları bir kare ileriye taşır.
+// UpdateAnimations advances the time-based animations by one frame.
 func (state *AppState) UpdateAnimations(now time.Time) {
-	// Giriş sekmesindeki progress bar 0 -> 100 -> 0 döngüsü
+	// The Home tab's progress bar cycles 0 -> 100 -> 0
 	if state.FormProgress != nil {
 		if !state.FormProgress.IsAnimating() {
 			if state.FormProgress.Value() >= 99.9 {
@@ -235,7 +235,7 @@ func (state *AppState) UpdateAnimations(now time.Time) {
 		state.FormProgress.Update(now)
 	}
 
-	// Daire daralma/genişleme pulse animasyonu
+	// The circle's shrink/grow pulse animation
 	if state.PulseVal != nil {
 		if !state.PulseVal.IsAnimating() {
 			if state.PulseVal.Value() == 0 {
@@ -247,7 +247,7 @@ func (state *AppState) UpdateAnimations(now time.Time) {
 		state.PulseVal.Update(now)
 	}
 
-	// Matrix/Particle Rain Stream Animasyonu
+	// Matrix/Particle rain stream animation
 	if state.PlaygroundMode == "Matrix" || state.PlaygroundMode == "Particle" {
 		if len(state.MatrixStreams) == 0 {
 			state.MatrixStreams = make([]MatrixStream, 150)
@@ -262,14 +262,14 @@ func (state *AppState) UpdateAnimations(now time.Time) {
 
 		for i := range state.MatrixStreams {
 			state.MatrixStreams[i].Y += state.MatrixStreams[i].Speed
-			if state.MatrixStreams[i].Y > 160 { // Sınırı aşanları sıfırla
+			if state.MatrixStreams[i].Y > 160 { // Reset whatever went past the edge
 				state.MatrixStreams[i].Y = float64(-10 - rand.Intn(40))
 				state.MatrixStreams[i].Speed = 0.5 + rand.Float64()*1.0
 			}
 		}
 	}
 
-	// Sparkline CPU Geçmiş Verisi üretimi
+	// Generate the Sparkline's CPU history
 	if len(state.CPUHistory) == 0 {
 		state.CPUHistory = make([]float64, 120)
 		for i := range state.CPUHistory {
@@ -300,7 +300,7 @@ func (state *AppState) UpdateAnimations(now time.Time) {
 		accentColor = cell.NewColorRGB(255, 255, 0)
 	}
 
-	// Menü sekme butonları renk geçişleri
+	// Colour transitions of the menu tab buttons
 	if state.TabColors != nil {
 		for name, anim := range state.TabColors {
 			if state.ActiveTab == name {
@@ -317,7 +317,7 @@ func (state *AppState) UpdateAnimations(now time.Time) {
 		}
 	}
 
-	// Resim geçişi (2 saniyede bir resimleri değiştir)
+	// Image transition (swap the images every 2 seconds)
 	if now.Sub(state.LastImageToggle) >= 2*time.Second {
 		state.UseImg2 = !state.UseImg2
 		if state.UseImg2 {
@@ -328,17 +328,17 @@ func (state *AppState) UpdateAnimations(now time.Time) {
 		state.LastImageToggle = now
 	}
 
-	// Çıkış diyalog animasyonu güncellemesi
+	// Update the exit dialog animation
 	if state.ExitDialogAnim != nil {
 		state.ExitDialogAnim.Update(now)
 	}
 
-	// Yardım diyalog animasyonu güncellemesi
+	// Update the help dialog animation
 	if state.HelpDialogAnim != nil {
 		state.HelpDialogAnim.Update(now)
 	}
 
-	// 3D otomatik rotasyon güncellemesi
+	// Update the automatic 3D rotation
 	if !state.IsDragging3D {
 		state.RotX = math.Mod(state.RotX+1.0, 360.0)
 		state.RotY = math.Mod(state.RotY+1.5, 360.0)
@@ -348,7 +348,7 @@ func (state *AppState) UpdateAnimations(now time.Time) {
 
 func main() {
 	screenReaderMode := slices.Contains(os.Args[1:], "--screen-reader")
-	// Standard I/O kullanarak terminal backend'ini oluştur
+	// Build the terminal backend on standard I/O
 	b := driver.NewBackend(os.Stdin, os.Stdout)
 	if err := b.Setup(); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
@@ -424,7 +424,7 @@ func main() {
 	state.TableState.Select(0)
 	state.ReferenceDataState = widgets.NewVirtualDataState()
 
-	// 1. Resmi oluştur (Merkez kırmızı, dışı mavi daire)
+	// 1. Build the image (a circle, red in the centre and blue outside)
 	imgW, imgH := 128, 128
 	testImg1 := image.NewRGBA(image.Rect(0, 0, imgW, imgH))
 	for dy := 0; dy < imgH; dy++ {
@@ -444,7 +444,7 @@ func main() {
 	state.TestImg1 = testImg1
 	state.ActiveImg = testImg1
 
-	// 2. Resmi oluştur (Köşegen yeşil-mor geçiş gradyanı)
+	// 2. Build the image (a diagonal green-to-purple gradient)
 	testImg2 := image.NewRGBA(image.Rect(0, 0, imgW, imgH))
 	for dy := 0; dy < imgH; dy++ {
 		for dx := 0; dx < imgW; dx++ {
@@ -457,7 +457,7 @@ func main() {
 	}
 	state.TestImg2 = testImg2
 
-	// 3. apple.png dokusunu dosyadan yükle (fallback'li)
+	// 3. Load the apple.png texture from a file (with a fallback)
 	appleFile, err := os.Open("examples/showcase/apple.png")
 	if err != nil {
 		appleFile, err = os.Open("examples/demo/apple.png")
@@ -760,7 +760,7 @@ func main() {
 	state.CmdPalette.AllItems = cmdItems
 	state.CmdPalette.Filtered = widgets.FuzzyFilter("", cmdItems)
 
-	// 30 FPS zamanlayıcısı (~33ms)
+	// 30 FPS ticker (~33ms)
 	ticker := time.NewTicker(33 * time.Millisecond)
 	defer ticker.Stop()
 
@@ -768,10 +768,10 @@ func main() {
 	lastFpsCalc := time.Now()
 	var fps float64
 
-	// İlk kareyi (frame) çiz
+	// Draw the first frame
 	drawApp(t, b, state, fps)
 
-	// Olay dinleme döngüsü (Event Loop)
+	// Event loop
 	for {
 		select {
 		case ev, ok := <-b.Events():
@@ -783,8 +783,8 @@ func main() {
 				recordReferenceInteraction(state, fmt.Sprintf("key type=%d rune=%q ctrl=%t alt=%t shift=%t", ev.Key.Type, ev.Key.Ch, ev.Key.Ctrl, ev.Key.Alt, ev.Key.Shift))
 				focused := t.FocusManager().Focused()
 
-				// Palet açıksa tüm tuşları ona yönlendir. Ctrl+P burada
-				// paleti kapatır; kapalıyken aşağıdaki KeybindingManager açar.
+				// While the palette is open, every key goes to it. Ctrl+P here closes
+				// the palette; while it is closed, the KeybindingManager below opens it.
 				paletteWasOpen := state.CmdPalette.IsOpen
 				if state.CmdPalette.HandleKey(ev.Key) {
 					if paletteWasOpen && !state.CmdPalette.IsOpen {
@@ -1002,10 +1002,10 @@ func main() {
 					break
 				}
 
-				// Eğer bir TextInput aktif odaklıysa, klavye girdilerini ona yönlendir
+				// If a TextInput has the focus, send keyboard input to it
 				if focused == "username_input" {
 					if state.UsernameInputState.HandleKey(ev.Key) {
-						// TextInput durumu güncellendi
+						// The TextInput state was updated
 					}
 
 				} else if focused == "demo_slider" {
@@ -1214,7 +1214,7 @@ func main() {
 			drawApp(t, b, state, fps)
 
 		case <-ticker.C:
-			// Animasyonları güncelle
+			// Update the animations
 			now := time.Now()
 			state.UpdateAnimations(now)
 			if state.LastProcessRead.IsZero() || now.Sub(state.LastProcessRead) >= 500*time.Millisecond {
@@ -1222,7 +1222,7 @@ func main() {
 				state.LastProcessRead = now
 			}
 
-			// Dither geçiş ilerlemesini güncelle
+			// Update the dither transition progress
 			if state.IsTransitioning {
 				if state.ShowHelpDialog || state.ShowExitDialog {
 					state.IsTransitioning = false
@@ -1241,10 +1241,10 @@ func main() {
 				}
 			}
 
-			// Ekranı yeniden çiz
+			// Redraw the screen
 			drawApp(t, b, state, fps)
 
-			// FPS hesaplama
+			// FPS calculation
 			frameCount++
 			if time.Since(lastFpsCalc) >= 1*time.Second {
 				fps = float64(frameCount) / time.Since(lastFpsCalc).Seconds()
@@ -1262,13 +1262,13 @@ func minInt(a, b int) int {
 	return b
 }
 
-// drawApp, uygulamanın durumunu okur ve ekranın yerleşimini çizdirir.
+// drawApp reads the application state and draws the screen layout.
 func drawApp(t *terminal.Terminal, b *driver.Backend, state *AppState, fps float64) {
 	frameStart := time.Now()
 	t.SetDebugMode(state.DebugMode)
-	// Modal açılışı, sekme dither'ından bağımsız bir animasyondur. Önceki
-	// sekme geçişinin old-frame'i modalın üzerine taşınırsa aynı panel iki
-	// farklı konumda görünür; modal açıkken terminal geçişini iptal et.
+	// Opening a modal is an animation of its own, separate from the tab dither. If
+	// the previous tab transition's old frame were carried over the modal, the same
+	// panel would show in two places; cancel the terminal transition while a modal is open.
 	if state.ShowHelpDialog || state.ShowExitDialog {
 		t.SetTransitionActive(false)
 	}
@@ -1287,19 +1287,19 @@ func drawApp(t *terminal.Terminal, b *driver.Backend, state *AppState, fps float
 				Bounds: f.Buffer.Area,
 			}},
 		})
-		// Tüm ana UI renkleri semantic theme token'larından gelir.
+		// All the main UI colours come from semantic theme tokens.
 		mainColor := demoTheme.Colors.Primary
 		accentColor := demoTheme.Colors.Success
 
-		// Eğer çıkış veya yardım diyalogu açık olacaksa, en baştan modalı kaydet ki çizilen arka plan widget'ları olay alamasın!
+		// If the exit or help dialog will be open, register the modal first, so the background widgets drawn under it get no events!
 		if state.ShowExitDialog {
 			dialogW, dialogH := uint16(46), uint16(9)
 			dialogArea := terminal.CenterRect(f.Buffer.Area, dialogW, dialogH)
 			dialogArea.X = uint16(int(dialogArea.X) + state.ModalOffsetX)
 			dialogArea.Y = uint16(int(dialogArea.Y) + state.ModalOffsetY)
-			// Modal alanı sabit kalır. Resimlerin native yerleşimi bu alana göre
-			// yeniden ölçeklenmez veya yeniden konumlandırılmaz. Görsel dialog
-			// aşağıda ayrıca animasyonlu olarak çizilir.
+			// The modal area stays fixed. The native placement of images is not
+			// rescaled or moved to fit it. The visible dialog is drawn separately,
+			// animated, below.
 			f.RegisterModal("exit_dialog", dialogArea, func() {
 				state.ExitDialogAnim.AnimateTo(0.0, 200*time.Millisecond, animation.EaseInCubic)
 			})
@@ -1315,10 +1315,10 @@ func drawApp(t *terminal.Terminal, b *driver.Backend, state *AppState, fps float
 			})
 		}
 
-		// 1. Ekranı dikeyde 3 bölgeye ayır:
-		// - Header (Sabit 3 satır)
-		// - Body (Kalan tüm dikey alan)
-		// - Footer (Sabit 1 satır)
+		// 1. Split the screen vertically into 3 regions:
+		// - Header (fixed, 3 rows)
+		// - Body (all the remaining height)
+		// - Footer (fixed, 1 row)
 		rootLay := layout.NewFlexLayout(
 			layout.Vertical,
 			0,
@@ -1476,7 +1476,7 @@ func drawApp(t *terminal.Terminal, b *driver.Backend, state *AppState, fps float
 			drawReference(t, f, state, demoTheme, mainColor, accentColor, bodyChunks[1])
 
 		case "Graphics", "Grafik":
-			// Grafik sekmesini yatayda iki eşit bölüme ayır: Sol tarafta Canvas, Sağ tarafta Resim ve Kontroller
+			// Split the Graphics tab into two equal halves: the Canvas on the left, the image and controls on the right
 			grafikLay := layout.NewFlexLayout(
 				layout.Horizontal,
 				1,
@@ -1485,7 +1485,7 @@ func drawApp(t *terminal.Terminal, b *driver.Backend, state *AppState, fps float
 			)
 			grafikChunks := grafikLay.Split(bodyChunks[1])
 
-			// Sağ tarafı dikey olarak ikiye böl: Üstte Gerçek Resim, Altta 3D Model Kontrolleri
+			// Split the right side vertically: the real image on top, the 3D model controls below
 			sağLay := layout.NewFlexLayout(
 				layout.Vertical,
 				1,
@@ -1494,7 +1494,7 @@ func drawApp(t *terminal.Terminal, b *driver.Backend, state *AppState, fps float
 			)
 			sağChunks := sağLay.Split(grafikChunks[1])
 
-			// 1. SOL TARAF: Braille Vektör Canvas
+			// 1. LEFT SIDE: Braille vector canvas
 			w := uint16(0)
 			h := uint16(0)
 			if grafikChunks[0].Width > 2 {
@@ -1515,54 +1515,54 @@ func drawApp(t *terminal.Terminal, b *driver.Backend, state *AppState, fps float
 			virtualH := int(h) * 4
 
 			if virtualW > 2 && virtualH > 2 {
-				// 3D rotasyon sürüklemesi için tıklama alanını kaydet
+				// Register the click area for dragging the 3D rotation
 				registerTargetClick(f, grafikChunks[0], func(ev driver.MouseEvent) {
 					state.IsDragging3D = true
 					state.Drag3DLastX = int(ev.X)
 					state.Drag3DLastY = int(ev.Y)
 				})
 
-				// 3D Model Tanımları (Köşeler ve Yüzler)
+				// 3D model definitions (vertices and faces)
 				var vertices []graphics.Vertex3D
 				var faces [][]int
 
 				switch state.ThreeDModel {
 				case "Piramit", "Pyramid":
 					vertices = []graphics.Vertex3D{
-						{X: -1.0, Y: 0.6, Z: -1.0}, // 0: sol-arka (BL)
-						{X: 1.0, Y: 0.6, Z: -1.0},  // 1: sağ-arka (BR)
-						{X: 1.0, Y: 0.6, Z: 1.0},   // 2: sağ-ön (FR)
-						{X: -1.0, Y: 0.6, Z: 1.0},  // 3: sol-ön (FL)
-						{X: 0.0, Y: -1.2, Z: 0.0},  // 4: tepe (apex)
+						{X: -1.0, Y: 0.6, Z: -1.0}, // 0: left-back (BL)
+						{X: 1.0, Y: 0.6, Z: -1.0},  // 1: right-back (BR)
+						{X: 1.0, Y: 0.6, Z: 1.0},   // 2: right-front (FR)
+						{X: -1.0, Y: 0.6, Z: 1.0},  // 3: left-front (FL)
+						{X: 0.0, Y: -1.2, Z: 0.0},  // 4: apex
 					}
 					faces = [][]int{
-						{3, 2, 1, 0}, // Taban (Base Quad)
-						{0, 1, 4},    // Arka yüz (Edge 0->1 to 4)
-						{1, 2, 4},    // Sağ yüz (Edge 1->2 to 4)
-						{2, 3, 4},    // Ön yüz (Edge 2->3 to 4)
-						{3, 0, 4},    // Sol yüz (Edge 3->0 to 4)
+						{3, 2, 1, 0}, // Base (Base Quad)
+						{0, 1, 4},    // Back face (Edge 0->1 to 4)
+						{1, 2, 4},    // Right face (Edge 1->2 to 4)
+						{2, 3, 4},    // Front face (Edge 2->3 to 4)
+						{3, 0, 4},    // Left face (Edge 3->0 to 4)
 					}
 
 				case "Dörtyüzlü":
-					// Düzgün Dörtyüzlü (Üçgen Piramit)
+					// Regular tetrahedron (triangular pyramid)
 					vertices = []graphics.Vertex3D{
-						{X: 0.0, Y: -1.2, Z: 0.0},  // 0: tepe
-						{X: -1.0, Y: 0.8, Z: -0.8}, // 1: sol-ön
-						{X: 1.0, Y: 0.8, Z: -0.8},  // 2: sağ-ön
-						{X: 0.0, Y: 0.8, Z: 1.2},   // 3: arka
+						{X: 0.0, Y: -1.2, Z: 0.0},  // 0: apex
+						{X: -1.0, Y: 0.8, Z: -0.8}, // 1: left-front
+						{X: 1.0, Y: 0.8, Z: -0.8},  // 2: right-front
+						{X: 0.0, Y: 0.8, Z: 1.2},   // 3: back
 					}
 					faces = [][]int{
-						{1, 2, 3}, // Taban
-						{0, 2, 1}, // Ön-Sol
-						{0, 3, 2}, // Ön-Sağ
-						{0, 1, 3}, // Arka
+						{1, 2, 3}, // Base
+						{0, 2, 1}, // Front-left
+						{0, 3, 2}, // Front-right
+						{0, 1, 3}, // Back
 					}
 				case "OBJ":
 					if state.OBJModel != nil {
 						vertices = state.OBJModel.Vertices
 						faces = state.OBJModel.Faces
 					}
-				default: // "Küp"
+				default: // "Cube"
 					vertices = []graphics.Vertex3D{
 						{X: -1.0, Y: -1.0, Z: -1.0},
 						{X: 1.0, Y: -1.0, Z: -1.0},
@@ -1594,13 +1594,13 @@ func drawApp(t *terminal.Terminal, b *driver.Backend, state *AppState, fps float
 				canvasH := float64(virtualH)
 
 				for i, v := range vertices {
-					// Eksen rotasyonları uygula (RotateY first, then RotateX!)
+					// Apply the axis rotations (RotateY first, then RotateX!)
 					v = v.RotateY(state.RotY)
 					v = v.RotateX(state.RotX)
 					v = v.RotateZ(state.RotZ)
 					rotated[i] = v
 
-					// Projeksiyon (Mesafe: 3.5, Ölçek: canvas yüksekliğinin %40'ı)
+					// Projection (distance: 3.5, scale: 40% of the canvas height)
 					scale := canvasH * 0.40
 					px, py, visible := graphics.Project(v, canvasW, canvasH, 3.5, scale)
 					projected[i] = struct {
@@ -1610,22 +1610,22 @@ func drawApp(t *terminal.Terminal, b *driver.Backend, state *AppState, fps float
 					}{x: int(px), y: int(py), z: v.Z, visible: visible}
 				}
 
-				// Yüzey renkleri (Dolu Renkli mod için prizmatik renk geçişleri)
+				// Face colours (prismatic colour shifts for the solid colour mode)
 				faceColors := []cell.Color{
-					cell.NewColorRGB(0, 255, 255), // Neon Turkuaz
-					cell.NewColorRGB(255, 0, 255), // Neon Pembe
-					cell.NewColorRGB(255, 255, 0), // Neon Sarı
-					cell.NewColorRGB(0, 255, 0),   // Neon Yeşil
-					cell.NewColorRGB(255, 128, 0), // Neon Turuncu
-					cell.NewColorRGB(0, 128, 255), // Neon Mavi
+					cell.NewColorRGB(0, 255, 255), // Neon turquoise
+					cell.NewColorRGB(255, 0, 255), // Neon pink
+					cell.NewColorRGB(255, 255, 0), // Neon yellow
+					cell.NewColorRGB(0, 255, 0),   // Neon green
+					cell.NewColorRGB(255, 128, 0), // Neon orange
+					cell.NewColorRGB(0, 128, 255), // Neon blue
 				}
 
 				textureImg := state.AppleImg
 
-				// Yüzeyleri kapla ve kenarlıkları çiz.
+				// Fill the faces and draw the edges.
 				wireStyle := cell.Style{Fg: cell.NewColorRGB(0, 255, 255)}
 				if state.ThreeDStyle == "Dokulu" {
-					wireStyle = cell.Style{Fg: cell.NewColorRGB(70, 75, 80)} // İnce ve parlamayan koyu gri kenar stili
+					wireStyle = cell.Style{Fg: cell.NewColorRGB(70, 75, 80)} // A thin, dull dark grey edge style
 				}
 				getFaceUV := func(faceIndex, corner int, fallback graphics.UV) graphics.UV {
 					if state.OBJModel == nil || faceIndex >= len(state.OBJModel.FaceUVs) || corner >= len(state.OBJModel.FaceUVs[faceIndex]) {
@@ -1796,7 +1796,7 @@ func drawApp(t *terminal.Terminal, b *driver.Backend, state *AppState, fps float
 							}
 						}
 
-						// Sadece ön yüze ait olan kenarlıkları çiz (Arka köşelerin görünmesini engeller)
+						// Draw only the edges of the front faces (keeps the back corners from showing)
 						canvas.DrawLine(p0.x, p0.y, p1.x, p1.y, wireStyle)
 						canvas.DrawLine(p1.x, p1.y, p2.x, p2.y, wireStyle)
 						if isQuad {
@@ -1819,7 +1819,7 @@ func drawApp(t *terminal.Terminal, b *driver.Backend, state *AppState, fps float
 			}
 			f.RenderWidget(canvasBlock, grafikChunks[0])
 
-			// 2. SAĞ ÜST TARAF: Gerçek Görsel Gösterimi (Native Image)
+			// 2. TOP RIGHT: the real image (native image)
 			imageBlock := widgets.Block{
 				Title:          " GERÇEK RESİM GÖSTERİMİ ",
 				TitleAlignment: widgets.AlignLeft,

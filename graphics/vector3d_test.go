@@ -6,7 +6,7 @@ import (
 )
 
 func TestVertex3DRotations(t *testing.T) {
-	// 90 derece rotasyon testleri
+	// 90 degree rotation tests
 	v := Vertex3D{X: 1, Y: 0, Z: 0}
 
 	// 90 degrees around Z: (1, 0, 0) -> (0, 1, 0)

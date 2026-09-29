@@ -11,37 +11,37 @@ import (
 	"github.com/thebanri/limoni/graphics"
 )
 
-// CommandItem, Komut Paleti'nde gösterilecek bir komutu temsil eder.
+// CommandItem is a command shown in the command palette.
 type CommandItem struct {
-	// Label, komutun gösterileceği ana metindir.
+	// Label is the command's main text.
 	Label string
-	// Detail, kısayol tuşu veya ek açıklama metnidir (ör: "Ctrl+P").
+	// Detail is the shortcut key or an extra description (e.g. "Ctrl+P").
 	Detail string
-	// Category, komutun ait olduğu kategoridir (ör: "Navigasyon").
+	// Category is the category the command belongs to (e.g. "Navigation").
 	Category string
-	// Handler, komut seçildiğinde çalıştırılacak callback fonksiyonudur.
+	// Handler is the callback run when the command is chosen.
 	Handler func()
 }
 
-// CommandPaletteState, Komut Paleti'nin veri durumunu yönetir.
+// CommandPaletteState holds the command palette's data.
 type CommandPaletteState struct {
-	// IsOpen, paletin açık olup olmadığını belirtir.
+	// IsOpen reports whether the palette is open.
 	IsOpen bool
-	// Query, arama kutusunun metin durumudur.
+	// Query is the text state of the search input.
 	Query TextInputState
-	// Selected, mevcut seçili sonuç indeksidir.
+	// Selected is the index of the selected result.
 	Selected int
-	// AllItems, tüm kayıtlı komutlardır.
+	// AllItems is every registered command.
 	AllItems []CommandItem
-	// Filtered, bulanık arama sonucu filtrelenmiş komutlardır.
+	// Filtered is the commands left by the fuzzy search.
 	Filtered []CommandItem
-	// MaxVisible, aynı anda gösterilecek maksimum sonuç sayısıdır.
+	// MaxVisible is the most results shown at once.
 	MaxVisible int
-	// ScrollOffset, uzun listelerde kaydırma ofseti.
+	// ScrollOffset is the scroll offset in long lists.
 	ScrollOffset int
 }
 
-// NewCommandPaletteState, yeni bir CommandPaletteState oluşturur.
+// NewCommandPaletteState returns a new CommandPaletteState.
 func NewCommandPaletteState() *CommandPaletteState {
 	return &CommandPaletteState{
 		Query:      *NewTextInputState(),
@@ -50,7 +50,7 @@ func NewCommandPaletteState() *CommandPaletteState {
 	}
 }
 
-// Open, paleti açar ve arama kutusunu temizler.
+// Open opens the palette and clears the search box.
 func (cps *CommandPaletteState) Open() {
 	cps.IsOpen = true
 	cps.Query.Text = cps.Query.Text[:0]
@@ -60,12 +60,12 @@ func (cps *CommandPaletteState) Open() {
 	cps.Filtered = FuzzyFilter("", cps.AllItems)
 }
 
-// Close, paleti kapatır.
+// Close closes the palette.
 func (cps *CommandPaletteState) Close() {
 	cps.IsOpen = false
 }
 
-// Toggle, paleti açar veya kapatır.
+// Toggle opens or closes the palette.
 func (cps *CommandPaletteState) Toggle() {
 	if cps.IsOpen {
 		cps.Close()
@@ -74,14 +74,14 @@ func (cps *CommandPaletteState) Toggle() {
 	}
 }
 
-// HandleKey, Command Palette açıkken gelen tuş olayını işler.
-// true döner ise olay tüketilmiştir, dış event loop'a yayılmamalıdır.
+// HandleKey handles a key event while the command palette is open.
+// If it returns true the event was consumed and must not propagate to the outer event loop.
 func (cps *CommandPaletteState) HandleKey(ev driver.KeyEvent) bool {
 	if !cps.IsOpen {
 		return false
 	}
 
-	// Ctrl+P, açık paleti de aynı kısayolla kapatır.
+	// Ctrl+P also closes an open palette with the same shortcut.
 	if ev.Type == driver.KeyRune && ev.Ch == 'p' && ev.Ctrl {
 		cps.Close()
 		return true
@@ -100,7 +100,7 @@ func (cps *CommandPaletteState) HandleKey(ev driver.KeyEvent) bool {
 				handler()
 			}
 		} else {
-			// Sonuç yoksa veya seçim geçersizse yine de paleti kapat
+			// Close the palette even with no results or an invalid selection
 			cps.Close()
 		}
 		return true
@@ -126,7 +126,7 @@ func (cps *CommandPaletteState) HandleKey(ev driver.KeyEvent) bool {
 		return true
 
 	default:
-		// Metin girişine yönlendir
+		// Pass it to the text input
 		changed := cps.Query.HandleKey(ev)
 		if changed {
 			query := cps.Query.Value()
@@ -151,16 +151,16 @@ func NewCommandPalettePosition() *CommandPalettePosition {
 	return &CommandPalettePosition{Top: -1, Right: -1, Bottom: -1, Left: -1}
 }
 
-// CommandPalette, Komut Paleti overlay widget'ıdır.
+// CommandPalette is the command palette overlay widget.
 type CommandPalette struct {
 	ID          string
 	State       *CommandPaletteState
 	Position    *CommandPalettePosition
-	Style       cell.Style // Arka plan stili
-	InputStyle  cell.Style // Arama kutusu stili
-	ItemStyle   cell.Style // Normal öğe stili
-	SelStyle    cell.Style // Seçili öğe stili
-	DetailStyle cell.Style // Kısayol/detay stili
+	Style       cell.Style // Background style
+	InputStyle  cell.Style // Search input style
+	ItemStyle   cell.Style // Normal item style
+	SelStyle    cell.Style // Selected item style
+	DetailStyle cell.Style // Shortcut/detail style
 
 	// Title is drawn in the top border. Empty means " ⌘ Commands ".
 	Title string
@@ -189,7 +189,7 @@ func (cp CommandPalette) panelArea(area cell.Rect) cell.Rect {
 		paletteHeight = int(area.Height) - 4
 	}
 
-	// Position yoksa eski davranış: yatayda ortalı, üstten 2 satır.
+	// Without a Position, the old behaviour: centred horizontally, 2 rows from the top.
 	x := int(area.X) + (int(area.Width)-paletteWidth)/2
 	y := int(area.Y) + 2
 	if cp.Position != nil {
@@ -224,14 +224,14 @@ func (cp CommandPalette) panelArea(area cell.Rect) cell.Rect {
 	return cell.NewRect(uint16(x), uint16(y), uint16(paletteWidth), uint16(paletteHeight))
 }
 
-// DebugArea, komut paletinin gerçek ekrandaki sınırını döndürür.
-// Çizim sırasında palette tam terminal alanını alır; panel ise bu alanın
-// içinde ortalandığı için Layout Inspector'a gerçek panel sınırını bildirir.
+// DebugArea returns the command palette's real bounds on screen.
+// The palette takes the whole terminal area while drawing, and the panel is
+// centred inside it, so this reports the real panel bounds to the Layout Inspector.
 func (cp CommandPalette) DebugArea(area cell.Rect) cell.Rect {
 	return cp.panelArea(area)
 }
 
-// Draw, Komut Paleti'ni ekranın ortasına overlay olarak çizer.
+// Draw draws the command palette as an overlay in the middle of the screen.
 func (cp CommandPalette) Draw(ctx cell.Context, buf *buffer.Buffer) {
 	if cp.State == nil || !cp.State.IsOpen {
 		return
@@ -262,7 +262,7 @@ func (cp CommandPalette) Draw(ctx cell.Context, buf *buffer.Buffer) {
 	startX := int(panel.X)
 	startY := int(panel.Y)
 
-	// Gölge efekti (sağ ve alt kenarda)
+	// Shadow effect (on the right and bottom edges)
 	shadowStyle := cell.Style{Bg: cell.NewColorRGB(15, 15, 15), Fg: cell.NewColorRGB(15, 15, 15)}
 	for dy := 1; dy <= paletH; dy++ {
 		for dx := 0; dx < 2; dx++ {
@@ -283,15 +283,15 @@ func (cp CommandPalette) Draw(ctx cell.Context, buf *buffer.Buffer) {
 		}
 	}
 
-	// Arka plan
+	// Background
 	bgStyle := cp.Style
 	if bgStyle.Bg == 0 {
 		bgStyle.Bg = cell.NewColorRGB(30, 30, 40)
 		bgStyle.Fg = cell.NewColorRGB(220, 220, 230)
 	}
 
-	// Arka plandaki yerel grafiklerin (Kitty/Sixel/iTerm2) sızmasını engellemek için
-	// palet ve gölge alanına z = -2 seviyesinde solid arka plan resmi kaydet:
+	// To keep native graphics (Kitty/Sixel/iTerm2) in the background from showing through,
+	// register a solid background image at z = -2 under the palette and its shadow:
 	if ctx.RegisterImage != nil {
 		proto := graphics.DetectProtocol()
 		if proto != graphics.ProtocolHalfBlock {
@@ -323,9 +323,9 @@ func (cp CommandPalette) Draw(ctx cell.Context, buf *buffer.Buffer) {
 		}
 	}
 
-	// Üst/Alt kenarlık (yuvarlak)
+	// Top/bottom border (rounded)
 	borderStyle := cell.Style{Fg: cell.NewColorRGB(100, 200, 255), Bg: bgStyle.Bg}
-	// Üst çizgi
+	// Top line
 	if c := buf.Get(uint16(startX), uint16(startY)); c != nil {
 		c.Content = '╭'
 		c.Style = borderStyle
@@ -348,7 +348,7 @@ func (cp CommandPalette) Draw(ctx cell.Context, buf *buffer.Buffer) {
 	titleStyle := cell.Style{Fg: cell.NewColorRGB(100, 200, 255), Bg: bgStyle.Bg, Modifier: cell.ModifierBold}
 	setEllipsized(buf, uint16(startX+2), uint16(startY), title, titleStyle, paletW-3, "…")
 
-	// Alt çizgi
+	// Bottom line
 	bottomY := startY + paletH - 1
 	if c := buf.Get(uint16(startX), uint16(bottomY)); c != nil {
 		c.Content = '╰'
@@ -365,7 +365,7 @@ func (cp CommandPalette) Draw(ctx cell.Context, buf *buffer.Buffer) {
 		}
 	}
 
-	// Sol/Sağ kenarlar
+	// Left/right edges
 	for dy := 1; dy < paletH-1; dy++ {
 		if c := buf.Get(uint16(startX), uint16(startY+dy)); c != nil {
 			c.Content = '│'
@@ -377,7 +377,7 @@ func (cp CommandPalette) Draw(ctx cell.Context, buf *buffer.Buffer) {
 		}
 	}
 
-	// Arama kutusu satırı (y = startY + 1)
+	// Search box row (y = startY + 1)
 	inputY := startY + 1
 	inputStyle := cp.InputStyle
 	if inputStyle.Fg == 0 {
@@ -385,11 +385,11 @@ func (cp CommandPalette) Draw(ctx cell.Context, buf *buffer.Buffer) {
 		inputStyle.Bg = cell.NewColorRGB(50, 50, 65)
 	}
 
-	// İkon: geniş karakterin devam hücresini de işaretle; aksi halde eski frame
-	// içeriği ikinci hücrede kalıp paletin kenarında kayma/artefakt oluşturabilir.
+	// Icon: mark the wide character's continuation cell too; otherwise the old frame's
+	// content can stay in the second cell and shift or smear the palette's edge.
 	searchIconWidth := drawRune(buf, startX+1, inputY, '🔍', inputStyle)
 
-	// Arama kutusu arka planı
+	// Search box background
 	for dx := 1 + searchIconWidth; dx < paletW-1; dx++ {
 		if c := buf.Get(uint16(startX+dx), uint16(inputY)); c != nil {
 			c.Content = ' '
@@ -423,7 +423,7 @@ func (cp CommandPalette) Draw(ctx cell.Context, buf *buffer.Buffer) {
 		}
 	}
 
-	// Ayırıcı çizgi (y = startY + 2)
+	// Separator line (y = startY + 2)
 	sepY := startY + 2
 	sepStyle := cell.Style{Fg: cell.NewColorRGB(60, 60, 80), Bg: bgStyle.Bg}
 	if c := buf.Get(uint16(startX), uint16(sepY)); c != nil {
@@ -441,7 +441,7 @@ func (cp CommandPalette) Draw(ctx cell.Context, buf *buffer.Buffer) {
 		}
 	}
 
-	// Sonuç listesi (y = startY + 3 ... )
+	// Result list (y = startY + 3 ... )
 	itemStyle := cp.ItemStyle
 	if itemStyle.Fg == 0 {
 		itemStyle.Fg = cell.NewColorRGB(200, 200, 210)
@@ -473,7 +473,7 @@ func (cp CommandPalette) Draw(ctx cell.Context, buf *buffer.Buffer) {
 			rowStyle = selStyle
 		}
 
-		// Arka plan
+		// Background
 		for dx := 1; dx < paletW-1; dx++ {
 			if c := buf.Get(uint16(startX+dx), uint16(y)); c != nil {
 				c.Content = ' '
@@ -481,7 +481,7 @@ func (cp CommandPalette) Draw(ctx cell.Context, buf *buffer.Buffer) {
 			}
 		}
 
-		// Seçim işaretçisi
+		// Selection marker
 		if isSelected {
 			if c := buf.Get(uint16(startX+1), uint16(y)); c != nil {
 				c.Content = '▸'
@@ -509,7 +509,7 @@ func (cp CommandPalette) Draw(ctx cell.Context, buf *buffer.Buffer) {
 			}
 		}
 
-		// Fare tıklama ve üzerine gelme (hover) olaylarını kaydet
+		// Register mouse click and hover events
 		rowArea := cell.NewRect(uint16(startX+1), uint16(y), uint16(paletW-2), 1)
 		itemIdx := idx
 		itemHandler := item.Handler
@@ -634,7 +634,7 @@ func drawHighlighted(buf *buffer.Buffer, x, y, limit int, label, query string, s
 	return x
 }
 
-// itoa, basit int -> string dönüşümü.
+// itoa is a simple int -> string conversion.
 func itoa(n int) string {
 	if n == 0 {
 		return "0"

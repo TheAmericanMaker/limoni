@@ -310,11 +310,11 @@ func (b *Backend) startEventLoop() {
 		return
 	}
 
-	// 1. SIGWINCH (Pencere boyut değişimi) yakalayıcıyı başlat
+	// 1. Start the SIGWINCH (window resize) handler
 	b.sigWinch = make(chan os.Signal, 1)
 	signal.Notify(b.sigWinch, unix.SIGWINCH)
 
-	// Harici sonlandırma sinyalleri (SIGINT, SIGTERM) geldiğinde terminali koru
+	// Protect the terminal when an external termination signal (SIGINT, SIGTERM) arrives
 	sigTerm := make(chan os.Signal, 1)
 	signal.Notify(sigTerm, os.Interrupt, unix.SIGTERM)
 	go func() {
@@ -353,14 +353,14 @@ func (b *Backend) startEventLoop() {
 		}
 	}()
 
-	// 2. TTY Girdi Okuyucu ve ESC Zaman Aşımı Olay Döngüsünü başlat
+	// 2. Start the TTY input reader and the ESC timeout event loop
 	inputChan := make(chan []byte, 32)
 	go func() {
 		buf := make([]byte, 512)
 		for {
 			n, err := b.in.Read(buf)
 			if err != nil {
-				// Hata durumunda veya dosya kapandığında okuyucu goroutine sonlanır
+				// The reader goroutine exits on error or when the file is closed
 				close(inputChan)
 				return
 			}
@@ -396,14 +396,14 @@ func (b *Backend) startEventLoop() {
 				}
 				readBuf = append(readBuf, chunk...)
 
-				// Eğer ESC zamanlayıcı aktifse durdur (yeni karakter geldi, escape sequence devam ediyor olabilir)
+				// Stop the ESC timer if it is running (a new byte arrived; an escape sequence may be continuing)
 				if escTimer != nil {
 					escTimer.Stop()
 					escTimer = nil
 					escTimerChan = nil
 				}
 
-				// Tamponu ayrıştır
+				// Parse the buffer
 				for len(readBuf) > 0 {
 					ev, consumed := ParseBracketedPaste(readBuf)
 					if consumed == 0 {
@@ -419,21 +419,21 @@ func (b *Backend) startEventLoop() {
 						}
 						readBuf = readBuf[consumed:]
 					} else {
-						// Tamamlanmamış bir dizi var
+						// An incomplete sequence is pending
 						break
 					}
 				}
 
-				// Eğer tamponda sadece tek bir '\x1b' (Escape) kaldıysa, ESC tuşu olup olmadığını
-				// anlamak için bir zaman aşımı başlatıyoruz.
+				// If only a single '\x1b' (Escape) is left in the buffer, start a timeout to
+				// find out whether it was the ESC key.
 				if len(readBuf) == 1 && readBuf[0] == '\x1b' {
 					escTimer = time.NewTimer(escTimeoutDuration)
 					escTimerChan = escTimer.C
 				}
 
 			case <-escTimerChan:
-				// Zaman aşımı doldu ve yeni byte gelmedi. Bu durumda tamponda bekleyen '\x1b'
-				// doğrudan ESC tuşu basımı olarak kabul edilir.
+				// The timeout expired with no new byte, so the '\x1b' left in the buffer
+				// is taken as a press of the ESC key.
 				if len(readBuf) == 1 && readBuf[0] == '\x1b' {
 					select {
 					case b.events <- Event{
@@ -454,7 +454,7 @@ func (b *Backend) startEventLoop() {
 	}()
 }
 
-// Size terminal pencerisinin mevcut satır ve sütun boyutunu döner.
+// Size returns the terminal window's current rows and columns.
 func (b *Backend) Size() (uint16, uint16, error) {
 	if b.portableIO != nil {
 		b.mu.RLock()
@@ -469,8 +469,8 @@ func (b *Backend) Size() (uint16, uint16, error) {
 	return ws.Col, ws.Row, nil
 }
 
-// CellPixelSize terminal hücresinin piksel cinsinden genişlik ve yüksekliğini döner.
-// Eğer terminal piksel bilgilerini raporlamıyorsa veya hata oluşursa varsayılan olarak (10, 20) döner.
+// CellPixelSize returns the width and height of a terminal cell in pixels.
+// If the terminal does not report pixel sizes, or an error occurs, it returns (10, 20).
 func (b *Backend) CellPixelSize() (uint16, uint16, error) {
 	if b.portableIO != nil {
 		return 10, 20, nil
@@ -486,7 +486,7 @@ func (b *Backend) CellPixelSize() (uint16, uint16, error) {
 	return ws.Xpixel / ws.Col, ws.Ypixel / ws.Row, nil
 }
 
-// Write doğrudan terminal çıkışına veri yazar.
+// Write writes data straight to the terminal output.
 func (b *Backend) Write(p []byte) (int, error) {
 	if b.portableIO != nil {
 		return b.portableIO.Write(p)
@@ -494,8 +494,8 @@ func (b *Backend) Write(p []byte) (int, error) {
 	return b.out.Write(p)
 }
 
-// StartSyncUpdate modern terminallerde senkron güncellemeyi başlatır (\x1b[?2026h).
-// Bu ekran yırtılmalarını (tearing/flicker) engeller.
+// StartSyncUpdate begins a synchronised update on modern terminals (\x1b[?2026h).
+// This prevents tearing and flicker.
 func (b *Backend) StartSyncUpdate() {
 	if b.portableIO != nil {
 		_, _ = b.portableIO.Write([]byte("\x1b[?2026h"))
@@ -504,7 +504,7 @@ func (b *Backend) StartSyncUpdate() {
 	b.out.WriteString("\x1b[?2026h")
 }
 
-// EndSyncUpdate senkron güncellemeyi kapatır (\x1b[?2026l).
+// EndSyncUpdate ends the synchronised update (\x1b[?2026l).
 func (b *Backend) EndSyncUpdate() {
 	if b.portableIO != nil {
 		_, _ = b.portableIO.Write([]byte("\x1b[?2026l"))

@@ -34,7 +34,7 @@ func TestKeybindingManager_Handle_Rune(t *testing.T) {
 		Handler: func() { ran = true },
 	})
 
-	// Eşleşen tuş
+	// Matching key
 	if !km.Handle(driver.KeyEvent{Type: driver.KeyRune, Ch: 'p', Ctrl: true}) {
 		t.Fatal("eşleşen kısayol true dönmeli")
 	}
@@ -42,7 +42,7 @@ func TestKeybindingManager_Handle_Rune(t *testing.T) {
 		t.Fatal("handler çalışmalı")
 	}
 
-	// Yanlış karakter
+	// Wrong character
 	ran = false
 	if km.Handle(driver.KeyEvent{Type: driver.KeyRune, Ch: 'x', Ctrl: true}) {
 		t.Fatal("eşleşmeyen karakter false dönmeli")
@@ -72,7 +72,7 @@ func TestKeybindingManager_Handle_SpecialKey(t *testing.T) {
 		t.Fatal("handler çalışmalı")
 	}
 
-	// Farklı tuş eşleşmemeli
+	// A different key must not match
 	if km.Handle(driver.KeyEvent{Type: driver.KeyEnter}) {
 		t.Fatal("Enter Esc kısayoluyla eşleşmemeli")
 	}
@@ -93,7 +93,7 @@ func TestKeybindingManager_Handle_Shift(t *testing.T) {
 		t.Fatal("handler çalışmalı")
 	}
 
-	// Shift'siz Tab eşleşmemeli
+	// Tab without Shift must not match
 	ran = false
 	if km.Handle(driver.KeyEvent{Type: driver.KeyTab}) {
 		t.Fatal("Shift'siz Tab eşleşmemeli")
@@ -140,7 +140,7 @@ func TestKeybindingManager_ToCommandItems(t *testing.T) {
 		Label: "Komut Paletini Aç/Kapa", Category: "Genel",
 		Handler: func() {},
 	})
-	// Label'sız kısayollar CommandItem'a dönüşmemeli
+	// Shortcuts without a Label must not become CommandItems
 	km.Register(Keybinding{Key: driver.KeyEsc, Handler: func() {}})
 
 	items := km.ToCommandItems()

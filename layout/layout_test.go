@@ -7,7 +7,7 @@ import (
 )
 
 func TestFlexLayoutHorizontalRatios(t *testing.T) {
-	// 100 genişlikli alan, yatayda 1:2:2 oranında bölünür
+	// An area 100 wide, split horizontally 1:2:2
 	area := cell.NewRect(0, 0, 100, 10)
 	lay := NewFlexLayout(Horizontal, 0, Ratio(1), Ratio(2), Ratio(2))
 
@@ -16,8 +16,8 @@ func TestFlexLayoutHorizontalRatios(t *testing.T) {
 		t.Fatalf("Bölünen parça sayısı hatalı. Beklenen: 3, Alınan: %d", len(rects))
 	}
 
-	// Oranlar: 1/5 (%20), 2/5 (%40), 2/5 (%40)
-	// Beklenen genişlikler: 20, 40, 40
+	// Ratios: 1/5 (20%), 2/5 (40%), 2/5 (40%)
+	// Expected widths: 20, 40, 40
 	expectedWidths := []uint16{20, 40, 40}
 	expectedX := []uint16{0, 20, 60}
 
@@ -68,7 +68,7 @@ func TestResolveBreakpointFallbackAndUnsortedInput(t *testing.T) {
 }
 
 func TestFlexLayoutVerticalMixed(t *testing.T) {
-	// 50 yükseklikli alan, dikeyde Fixed(10), Percentage(20) (%20 of 50 = 10) ve Fill() (geriye kalan: 30)
+	// An area 50 high, split vertically into Fixed(10), Percentage(20) (20% of 50 = 10) and Fill() (the remaining 30)
 	area := cell.NewRect(0, 0, 80, 50)
 	lay := NewFlexLayout(Vertical, 0, Fixed(10), Percentage(20), Fill())
 
@@ -94,9 +94,9 @@ func TestFlexLayoutVerticalMixed(t *testing.T) {
 }
 
 func TestFlexLayoutGap(t *testing.T) {
-	// 20 genişlikli alan, yatayda 3 adet Fixed(5) ve aralarında 2 hücre boşluk (gap = 2) ile bölünür.
-	// Toplam gap: 2 * 2 = 4. Kullanılabilir net alan: 20 - 4 = 16.
-	// Sabit alanlar: 5 + 5 + 5 = 15. Kalan 1 hücre orantısal paylaştırılmaz çünkü hepsi sabit.
+	// An area 20 wide, split horizontally into 3 Fixed(5) with a 2-cell gap between them (gap = 2).
+	// Total gap: 2 * 2 = 4. Net usable space: 20 - 4 = 16.
+	// Fixed areas: 5 + 5 + 5 = 15. The remaining cell is not shared out, since all of them are fixed.
 	area := cell.NewRect(0, 0, 20, 5)
 	lay := NewFlexLayout(Horizontal, 2, Fixed(5), Fixed(5), Fixed(5))
 
@@ -114,37 +114,37 @@ func TestFlexLayoutGap(t *testing.T) {
 }
 
 func TestFlexLayoutExceededScaling(t *testing.T) {
-	// 10 genişlikli küçük bir alana toplamı 20 olan kısıtlamalar uyguluyoruz.
-	// Oranlanarak küçültülmeli ve alan aşılmamalıdır.
+	// Constraints adding up to 20 applied to a small area 10 wide.
+	// They must shrink proportionally and not exceed the area.
 	area := cell.NewRect(0, 0, 10, 5)
-	lay := NewFlexLayout(Horizontal, 0, Fixed(10), Fixed(10)) // Toplam 20, alan 10
+	lay := NewFlexLayout(Horizontal, 0, Fixed(10), Fixed(10)) // Total 20, area 10
 
 	rects := lay.Split(area)
-	// Beklenen: Her biri 5 genişliğe düşürülmeli
+	// Expected: each shrinks to a width of 5
 	if rects[0].Width != 5 || rects[1].Width != 5 {
 		t.Errorf("Aşım oranlaması başarısız. Alınan genişlikler: %d ve %d", rects[0].Width, rects[1].Width)
 	}
 }
 
 func TestFlexLayoutMinMaxConstraints(t *testing.T) {
-	// 50 genişlikli alan, yatayda Min(15), Max(10) ve Fill()
-	// Toplam kullanılabilir alan: 50
-	// 1. Min(15) başlangıçta 15 alır.
-	// 2. Max(10) başlangıçta 0 alır.
-	// 3. Fill() başlangıçta 0 alır.
-	// Kalan alan: 50 - 15 = 35.
-	// Kalan alan 35, büyüme yeteneği olan Min (ağırlık 1), Max (ağırlık 1, limit 10), Fill (ağırlık 1) arasında dağıtılır.
-	// Iterasyon 1: Ağırlık toplamı = 3. remaining = 35.
-	// Dağıtılan pay: 35 / 3 = 11.
-	// - Min eklenir: +11. Toplam: 15 + 11 = 26.
-	// - Max eklenir: +11. Toplam: 11. Ama Max(10) olduğu için 10'da kilitlenir.
-	// - Fill eklenir: +11. Toplam: 11.
-	// Iterasyon 2: Max artık devredışı. Kalan remaining = 3.
-	// Kalan 3, Min ve Fill arasında dağıtılır.
-	// - Min eklenir: +1. Toplam: 26 + 1 = 27.
-	// - Kalan yuvarlama farkı 1, soldan sağa ilk aktif elemana (Min) eklenir: +1. Toplam Min = 28.
-	// - Fill eklenir: +1. Toplam Fill = 12.
-	// Toplam sizes: Min=28, Max=10, Fill=12. Toplam = 50.
+	// An area 50 wide, split horizontally into Min(15), Max(10) and Fill()
+	// Total usable space: 50
+	// 1. Min(15) starts with 15.
+	// 2. Max(10) starts with 0.
+	// 3. Fill() starts with 0.
+	// Remaining space: 50 - 15 = 35.
+	// The remaining 35 is shared among those that can grow: Min (weight 1), Max (weight 1, limit 10), Fill (weight 1).
+	// Iteration 1: total weight = 3. remaining = 35.
+	// Share: 35 / 3 = 11.
+	// - Min gets +11. Total: 15 + 11 = 26.
+	// - Max gets +11. Total: 11. But as it is Max(10), it locks at 10.
+	// - Fill gets +11. Total: 11.
+	// Iteration 2: Max is now inactive. remaining = 3.
+	// The remaining 3 is shared between Min and Fill.
+	// - Min gets +1. Total: 26 + 1 = 27.
+	// - The rounding remainder of 1 goes to the first active element from the left (Min): +1. Min total = 28.
+	// - Fill gets +1. Fill total = 12.
+	// Total sizes: Min=28, Max=10, Fill=12. Total = 50.
 
 	area := cell.NewRect(0, 0, 50, 10)
 	lay := NewFlexLayout(Horizontal, 0, Min(15), Max(10), Fill())
@@ -183,10 +183,10 @@ func TestFlexLayoutFitContent(t *testing.T) {
 }
 
 func TestFlexLayoutFitContentMixed(t *testing.T) {
-	// 100 genişlikli alan
+	// An area 100 wide
 	// FitContent() (size = 15)
 	// Fixed(20)
-	// Fill() (geriye kalan: 100 - 15 - 20 = 65)
+	// Fill() (the remaining 100 - 15 - 20 = 65)
 	area := cell.NewRect(0, 0, 100, 10)
 	lay := NewFlexLayout(Horizontal, 0, FitContent(), Fixed(20), Fill())
 

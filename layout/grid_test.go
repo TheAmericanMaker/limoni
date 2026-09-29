@@ -9,8 +9,8 @@ import (
 func TestGridLayoutBasic(t *testing.T) {
 	parent := cell.NewRect(0, 0, 100, 40)
 
-	// Columns: 20 fixed, 50%, 1fr (kalan: 100 - 20 - 50 = 30)
-	// Rows: 10 fixed, 2fr, 1fr (kalan: 40 - 10 = 30)
+	// Columns: 20 fixed, 50%, 1fr (remaining: 100 - 20 - 50 = 30)
+	// Rows: 10 fixed, 2fr, 1fr (remaining: 40 - 10 = 30)
 	// Gap: 0
 	gridLayout := NewGridLayout(
 		[]GridConstraint{GridFixed(20), GridPercentage(50), GridFraction(1)},
