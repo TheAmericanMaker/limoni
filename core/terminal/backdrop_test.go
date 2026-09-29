@@ -167,6 +167,9 @@ func TestBackdropWaitsForTheApplicationAfterAResize(t *testing.T) {
 	if err := term.Draw(func(f *Frame) {}); err != nil {
 		t.Fatal(err)
 	}
+	// Both, since the backends differ: Linux keeps the size SetSize gives,
+	// Windows reads it from the IO on every call.
+	io.Width, io.Height = 30, 6
 	term.driver.SetSize(30, 6)
 	before := len(io.Output())
 	*now = now.Add(time.Second)
