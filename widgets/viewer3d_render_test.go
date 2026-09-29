@@ -8,6 +8,7 @@ import (
 
 	"github.com/thebanri/limoni/core/buffer"
 	"github.com/thebanri/limoni/core/cell"
+	"github.com/thebanri/limoni/core/driver"
 	"github.com/thebanri/limoni/graphics"
 )
 
@@ -308,6 +309,16 @@ func TestViewer3DPixels(t *testing.T) {
 	if rec.img == first {
 		t.Error("a rotated model reused the old picture")
 	}
+	// Orbiting through a State is a change too.
+	v.State = &Viewer3DState{}
+	v.Draw(rec.ctx(area), buf)
+	orbited := rec.img
+	v.State.RotY = 30
+	v.Draw(rec.ctx(area), buf)
+	if rec.img == orbited {
+		t.Error("an orbited model reused the old picture")
+	}
+	v.State = nil
 	ctx := rec.ctx(area)
 	if n := testing.AllocsPerRun(10, func() { v.RotY++; v.Draw(ctx, buf) }); n != 0 {
 		t.Errorf("%.0f allocs per moving pixel frame in the widget (encoding is the terminal's)", n)
@@ -324,3 +335,20 @@ func TestViewer3DPixels(t *testing.T) {
 
 // Viewer3D is a Widget, so layouts and Frame.RenderWidget can place it.
 var _ Widget = (*Viewer3D)(nil)
+
+// With an orbit State the draw still does not allocate: the mouse handler is
+// built once and registering it each frame costs nothing.
+func BenchmarkViewer3DDrawOrbit(b *testing.B) {
+	buf, ctx := prepareBenchmarkEnv()
+	ctx.RegisterMouse = func(cell.Rect, func(driver.MouseEvent)) {}
+	ctx.CaptureMouse = func(func(driver.MouseEvent)) {}
+	state := &Viewer3DState{}
+	v := &Viewer3D{Model: graphics.NewSphere(1, 24, 24), Shading: ShadingLambert, RotX: 20, State: state}
+	v.Draw(ctx, buf)
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		state.RotY = float64(i % 360)
+		v.Draw(ctx, buf)
+	}
+}
