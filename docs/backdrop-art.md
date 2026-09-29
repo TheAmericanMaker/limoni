@@ -2,7 +2,8 @@
 
 A backdrop is whatever sits behind the text in your terminal. Limoni ships
 four scenes (aurora, city, starfield, synthwave), and this guide is about
-making your own: a picture, a piece of ASCII art, or ASCII art that moves.
+making your own: a picture, a piece of ASCII art, ASCII art that moves, or
+a program that draws a scene of its own.
 
 Everything here works in two places:
 
@@ -283,7 +284,79 @@ Two things to know about tool output:
 
 ---
 
-## 7. A picture as wallpaper
+## 7. A scene of your own: a program
+
+Art is drawn once, at one size. A scene that fills the screen whatever its
+size, and moves the way the built-in ones do, is a program — in any
+language — named with `-scene-cmd`:
+
+```bash
+backdrop-shell -scene-cmd ~/.config/limoni/scenes/fireflies.py
+backdrop-shell enable -scene-cmd ~/.config/limoni/scenes/fireflies.py   # in every terminal
+```
+
+A complete example is
+[`apps/backdrop-shell/scenes/fireflies.py`](../apps/backdrop-shell/scenes/fireflies.py);
+copy it and change what it draws. The smallest scene there is, a dot that
+swings across the middle of the screen:
+
+```python
+#!/usr/bin/env python3
+import math, os, sys, time
+
+cols, rows = int(os.environ["LIMONI_COLS"]), int(os.environ["LIMONI_ROWS"])
+t = 0.0
+while True:
+    x = int((math.sin(t) + 1) / 2 * (cols - 1))
+    # A frame: clear, move to the middle row, draw a yellow dot.
+    sys.stdout.write(f"\x1b[2J\x1b[{rows // 2 + 1};{x + 1}H\x1b[38;2;255;210;60m•")
+    sys.stdout.flush()
+    t += 0.1
+    time.sleep(0.1)
+```
+
+Save it, `chmod +x` it, and give its path to `-scene-cmd`. The rules:
+
+- **It is an executable file.** A script starts with `#!` and is made
+  executable with `chmod +x`. To pass arguments, write a two-line script
+  that calls the real thing with them.
+- **It runs on a terminal the size of the screen.** `LIMONI_COLS` and
+  `LIMONI_ROWS` hold the size; `stty size`, `tput cols` and Python's
+  `shutil.get_terminal_size()` give it too.
+- **It draws as on any terminal:** colours (`\x1b[38;2;R;G;Bm` for text,
+  `\x1b[48;2;R;G;Bm` for background), moving the cursor
+  (`\x1b[ROW;COLH`, counted from 1), clearing (`\x1b[2J`).
+- **Each frame starts by clearing or going home** — `\x1b[2J` or
+  `\x1b[H`. A frame is shown when the next one begins, so a half-drawn one
+  never shows. When the program falls quiet between frames, what it drew
+  shows too, so one that draws a single picture and sleeps works as well.
+- **Flush after each frame** (`flush()`, `fflush(stdout)`), or the frame
+  waits in the program's own buffer.
+- **A cell without a background colour shows the terminal's own
+  background**, like a space in art; a cell with one is part of the scene.
+  `-opacity` fades both, as for any scene.
+
+backdrop-shell looks after the rest. When the window changes size, the
+program is started again with the new size. While the window is out of
+focus, or a full-screen program covers the background, the program is
+stopped, and costs nothing; it goes on where it was once the background
+can be seen. When another background is chosen or the terminal closes, it
+is ended, together with anything it started. `-fps` and `-still` do not
+apply: the program sets its own pace.
+
+Its error output is thrown away, since the screen belongs to your shell.
+If the background stays empty, run the program on its own in a terminal —
+`~/.config/limoni/scenes/fireflies.py` — and read what it says.
+
+What reaches the terminal is only what changed from one frame to the next,
+so redrawing everything every frame is fine. What costs is colour that
+drifts smoothly: it changes every cell every frame. Round colours to a few
+steps, as `fireflies.py` does, and a cell is sent again only when it
+crosses one.
+
+---
+
+## 8. A picture as wallpaper
 
 ```bash
 backdrop-shell -image ~/Pictures/wallpaper.jpg -opacity 0.3
@@ -304,7 +377,7 @@ the terminal opens and again when the window changes size.
 
 ---
 
-## 8. What it costs
+## 9. What it costs
 
 What is sent to the terminal is only the characters that change, so a
 background costs as much as it moves. Measured behind fish in kitty,
@@ -330,7 +403,7 @@ characters that change, or `-still`.
 
 ---
 
-## 9. When something looks wrong
+## 10. When something looks wrong
 
 | You see | Why, and what to do |
 | :--- | :--- |
@@ -339,11 +412,12 @@ characters that change, or `-still`.
 | A setting is drawn as text | It must start at the first column; an indented `@fps` is part of the picture. Only the names in the table in section 3 are settings. |
 | Rows are ragged | Tabs (they jump to multiples of eight) or two-column characters (replaced by a space). Use spaces and one-column characters. |
 | Nothing at all | A 16-colour terminal, `LIMONI_BACKDROP=off`, or you are inside backdrop-shell already (`backdrop-shell status` says so). |
+| A program's scene stays empty | Run the program on its own to see its errors; its error output is thrown away behind the shell. Check that it is `chmod +x`, starts with `#!`, and flushes after each frame. |
 | The art hides behind a program | Programs that paint their own background (btop, a vim colour scheme) cover it. That is by design. |
 
 ---
 
-## 10. For Go programmers
+## 11. For Go programmers
 
 The same art and pictures work in any Limoni application:
 

@@ -74,14 +74,14 @@ func TestExampleArtLoads(t *testing.T) {
 		t.Fatal("no example art")
 	}
 	for _, f := range files {
-		if _, err := chooseScene("", "", f, false); err != nil {
+		if _, err := chooseScene("", "", f, "", false); err != nil {
 			t.Errorf("%s: %v", f, err)
 		}
 	}
-	if _, err := chooseScene("", "", "art/missing.txt", false); err == nil {
+	if _, err := chooseScene("", "", "art/missing.txt", "", false); err == nil {
 		t.Error("a missing file was accepted")
 	}
-	if bd, _ := chooseScene("aurora", "", "art/cat.txt", true); bd.Interval() != 0 {
+	if bd, _ := chooseScene("aurora", "", "art/cat.txt", "", true); bd.Interval() != 0 {
 		t.Error("-still did not freeze animated art")
 	}
 }

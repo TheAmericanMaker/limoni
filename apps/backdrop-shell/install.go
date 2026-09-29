@@ -39,7 +39,10 @@ type settings struct {
 	Still   bool
 	Image   string // a picture file; beats Scene
 	Art     string // an ASCII art file; beats Image and Scene
-	Select  bool   // the wrapper's own mouse selection, which leaves the background out
+	// SceneCmd is a program that draws the scene (scenecmd.go); it beats
+	// Scene, and Art and Image beat it.
+	SceneCmd string
+	Select   bool // the wrapper's own mouse selection, which leaves the background out
 }
 
 func defaultSettings() settings { return settings{Scene: "aurora", Opacity: 0.45, Select: true} }
@@ -86,6 +89,8 @@ func loadSettings(path string) (settings, error) {
 			s.Image = value
 		case "art":
 			s.Art = value
+		case "scene-cmd":
+			s.SceneCmd = value
 		case "select":
 			s.Select = value != "false"
 		}
@@ -110,10 +115,12 @@ still = %t
 image = %s
 # art: a text file of ASCII art instead of a scene; it beats image
 art = %s
+# scene-cmd: a program that draws the scene, in any language; image and art beat it
+scene-cmd = %s
 # select: select and copy with the mouse, leaving the background out;
 # false gives the mouse back to the terminal, whose selection copies it too
 select = %t
-`, strings.Join(backdrop.Names(), ", "), s.Scene, s.Opacity, s.FPS, s.Still, s.Image, s.Art, s.Select)
+`, strings.Join(backdrop.Names(), ", "), s.Scene, s.Opacity, s.FPS, s.Still, s.Image, s.Art, s.SceneCmd, s.Select)
 	return os.WriteFile(path, []byte(text), 0o644)
 }
 
@@ -333,6 +340,7 @@ func cmdEnable(args []string) error {
 	fl.BoolVar(&s.Still, "still", s.Still, "a still picture instead of an animation")
 	fl.StringVar(&s.Image, "image", s.Image, "a picture (PNG, JPEG, GIF) instead of a scene")
 	fl.StringVar(&s.Art, "art", s.Art, "a text file of ASCII art instead of a scene")
+	fl.StringVar(&s.SceneCmd, "scene-cmd", s.SceneCmd, "a program that draws the scene, in any language")
 	fl.BoolVar(&s.Select, "select", s.Select, "select and copy with the mouse without the background")
 	shells := fl.String("shells", "", "comma-separated shells to hook (default: fish, bash and zsh, those installed)")
 	if err := fl.Parse(args); err != nil {
@@ -344,17 +352,10 @@ func cmdEnable(args []string) error {
 	// freezing a newly chosen animation would look like a bug.
 	stillGiven, chosen := false, false
 	fl.Visit(func(f *flag.Flag) {
-		switch f.Name {
-		case "scene":
-			s.Image, s.Art = "", ""
+		if chooseOnly(f.Name, &s.Image, &s.Art, &s.SceneCmd) {
 			chosen = true
-		case "image":
-			s.Art = ""
-			chosen = true
-		case "art":
-			s.Image = ""
-			chosen = true
-		case "still":
+		}
+		if f.Name == "still" {
 			stillGiven = true
 		}
 	})
@@ -362,14 +363,14 @@ func cmdEnable(args []string) error {
 		s.Still = false
 	}
 	// The hook runs from anywhere, so a file is kept by its full path.
-	for _, p := range []*string{&s.Image, &s.Art} {
+	for _, p := range []*string{&s.Image, &s.Art, &s.SceneCmd} {
 		if *p != "" {
 			if abs, err := filepath.Abs(expandHome(*p)); err == nil {
 				*p = abs
 			}
 		}
 	}
-	if _, err := chooseScene(s.Scene, s.Image, s.Art, s.Still); err != nil {
+	if _, err := chooseScene(s.Scene, s.Image, s.Art, s.SceneCmd, s.Still); err != nil {
 		return err
 	}
 	bin, err := selfPath()
@@ -442,6 +443,8 @@ func cmdStatus() error {
 		fmt.Printf("          art=%s\n", s.Art)
 	} else if s.Image != "" {
 		fmt.Printf("          image=%s\n", s.Image)
+	} else if s.SceneCmd != "" {
+		fmt.Printf("          scene-cmd=%s\n", s.SceneCmd)
 	}
 	if s.Still {
 		fmt.Println("          still: the background is frozen. \"backdrop-shell enable -still=false\" makes it move.")

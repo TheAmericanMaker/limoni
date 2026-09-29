@@ -2,8 +2,8 @@
 
 <p align="center"><img src="../../assets/backdrop-shell.gif" alt="backdrop-shell: a fish prompt over an animated aurora; ls lists files in front of it, backdrop-shell opacity 0.9 brightens it at once, and backdrop-shell enable -scene synthwave switches the running terminal to a striped sunset over a neon grid" width="100%" /></p>
 
-Your shell, in front of an animated scene, a picture, or your own ASCII art —
-in any terminal with 256 colours or more.
+Your shell, in front of an animated scene, a picture, your own ASCII art, or
+a scene your own program draws — in any terminal with 256 colours or more.
 
 ```bash
 backdrop-shell                          # $SHELL over the aurora
@@ -13,6 +13,7 @@ backdrop-shell -fps 10                  # cap the scene's frame rate
 backdrop-shell -still                   # a still picture instead of an animation
 backdrop-shell -image ~/Pictures/wall.jpg   # a picture as wallpaper
 backdrop-shell -art art/cat.txt         # your own ASCII art, still or animated
+backdrop-shell -scene-cmd scenes/fireflies.py  # a scene your own program draws
 backdrop-shell -- btop                  # any command instead of the shell
 ```
 
@@ -21,6 +22,13 @@ that flies, clouds and rain. **[docs/backdrop-art.md](../../docs/backdrop-art.md
 (Türkçe: [docs/tr/backdrop-art.md](../../docs/tr/backdrop-art.md)) shows how
 to draw your own, colour it, and animate it frame by frame or across the
 screen — and how to turn the output of chafa, jp2a or lolcat into one.
+
+For a scene that fills the screen at any size and moves like the built-in
+ones, write a program in any language that draws on a terminal, and name it
+with `-scene-cmd`. It is run on a terminal the size of the screen, started
+again when the window changes size, stopped while the background cannot be
+seen, and ended with the terminal. [`scenes/fireflies.py`](scenes/fireflies.py)
+is an example to copy; section 7 of the guide has the rules.
 
 ## Install
 
@@ -62,7 +70,7 @@ backdrop-shell uninstall    # remove the lines, the settings and the binary
 
 **The background stopped moving?** `still = true` is set — `status` says so.
 `backdrop-shell enable -still=false` makes it move again, and choosing a
-background (`enable -scene …`, `-art …`, `-image …`) without `-still` does
+background (`enable -scene …`, `-art …`, `-image …`, `-scene-cmd …`) without `-still` does
 too. `backdrop-shell reset` starts over from the defaults.
 
 Changes apply at once to every open terminal, not only to new ones: each
@@ -87,11 +95,13 @@ fps = 0            # cap the frame rate; 0 is the scene's own
 still = false      # a still picture instead of an animation
 image =            # a picture file instead of a scene
 art =              # an ASCII art file instead of a scene; beats image
+scene-cmd =        # a program that draws the scene; image and art beat it
 select = true      # select with the mouse, leaving the background out
 ```
 
-`backdrop-shell enable -art ~/my-art.txt` (or `-image`, or `-scene`) switches
-between them.
+`backdrop-shell enable -art ~/my-art.txt` (or `-image`, `-scene-cmd`, or
+`-scene`) switches between them. On the command line too, the background
+named there is the one shown, whatever the settings name.
 
 ## Why a wrapper
 

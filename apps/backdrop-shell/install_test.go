@@ -159,16 +159,6 @@ func TestHooksHandOverInRealShells(t *testing.T) {
 	}
 }
 
-func withoutEnv(env []string, key string) []string {
-	out := env[:0:0]
-	for _, kv := range env {
-		if !strings.HasPrefix(kv, key+"=") {
-			out = append(out, kv)
-		}
-	}
-	return out
-}
-
 // A file that held nothing but the block was created by enable, and disable
 // takes it away again rather than leaving an empty rc file behind.
 func TestDisableRemovesAFileEnableCreated(t *testing.T) {

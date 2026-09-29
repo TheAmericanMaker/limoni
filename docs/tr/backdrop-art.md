@@ -2,8 +2,8 @@
 
 Arka plan (backdrop), terminalindeki yazının arkasında duran şeydir.
 Limoni dört hazır sahneyle geliyor (aurora, city, starfield, synthwave). Bu
-rehber kendininkini yapmakla ilgili: bir resim, bir ASCII art ya da hareket
-eden bir ASCII art.
+rehber kendininkini yapmakla ilgili: bir resim, bir ASCII art, hareket
+eden bir ASCII art ya da kendi sahnesini çizen bir program.
 
 Buradaki her şey iki yerde çalışır:
 
@@ -286,7 +286,79 @@ Araç çıktısı hakkında iki şey:
 
 ---
 
-## 7. Duvar kağıdı olarak resim
+## 7. Kendi sahnen: bir program
+
+Art bir kez, tek bir boyutta çizilir. Ekran hangi boyutta olursa olsun onu
+dolduran ve hazır sahneler gibi hareket eden bir sahne ise bir programdır —
+herhangi bir dilde — ve `-scene-cmd` ile verilir:
+
+```bash
+backdrop-shell -scene-cmd ~/.config/limoni/scenes/fireflies.py
+backdrop-shell enable -scene-cmd ~/.config/limoni/scenes/fireflies.py   # her terminalde
+```
+
+Eksiksiz bir örnek:
+[`apps/backdrop-shell/scenes/fireflies.py`](../../apps/backdrop-shell/scenes/fireflies.py).
+Kopyala ve çizdiğini değiştir. Olabilecek en küçük sahne, ekranın ortasında
+sağa sola sallanan bir nokta:
+
+```python
+#!/usr/bin/env python3
+import math, os, sys, time
+
+cols, rows = int(os.environ["LIMONI_COLS"]), int(os.environ["LIMONI_ROWS"])
+t = 0.0
+while True:
+    x = int((math.sin(t) + 1) / 2 * (cols - 1))
+    # Bir kare: temizle, ortadaki satıra git, sarı bir nokta çiz.
+    sys.stdout.write(f"\x1b[2J\x1b[{rows // 2 + 1};{x + 1}H\x1b[38;2;255;210;60m•")
+    sys.stdout.flush()
+    t += 0.1
+    time.sleep(0.1)
+```
+
+Kaydet, `chmod +x` ile çalıştırılabilir yap ve yolunu `-scene-cmd`'ye ver.
+Kurallar:
+
+- **Çalıştırılabilir bir dosya olmalı.** Betik `#!` ile başlar ve
+  `chmod +x` ile çalıştırılabilir yapılır. Argüman vermek için asıl
+  programı o argümanlarla çağıran iki satırlık bir betik yaz.
+- **Ekran boyutunda bir terminalde çalışır.** Boyut `LIMONI_COLS` ve
+  `LIMONI_ROWS`'ta; `stty size`, `tput cols` ve Python'un
+  `shutil.get_terminal_size()`'ı da verir.
+- **Her terminalde çizdiği gibi çizer:** renkler (yazı için
+  `\x1b[38;2;R;G;Bm`, arka plan için `\x1b[48;2;R;G;Bm`), imleci taşımak
+  (`\x1b[SATIR;SÜTUNH`, 1'den sayarak), temizlemek (`\x1b[2J`).
+- **Her kare temizleyerek ya da başa dönerek başlar** — `\x1b[2J` ya da
+  `\x1b[H`. Bir kare, bir sonraki başladığında gösterilir; böylece yarım
+  çizilmiş bir kare hiç görünmez. Program kareler arasında sustuğunda da
+  çizdiği gösterilir; tek bir resim çizip uyuyan bir program da çalışır.
+- **Her kareden sonra flush et** (`flush()`, `fflush(stdout)`), yoksa kare
+  programın kendi tamponunda bekler.
+- **Arka plan rengi olmayan hücre terminalin kendi arka planını gösterir**,
+  art'taki boşluk gibi; rengi olan hücre sahnenin parçasıdır. `-opacity`
+  ikisini de her sahnedeki gibi soldurur.
+
+Gerisini backdrop-shell halleder. Pencerenin boyutu değişince program yeni
+boyutla yeniden başlatılır. Pencere odakta değilken ya da tam ekran bir
+program arka planı kapatırken program durdurulur ve hiçbir şeye mal olmaz;
+arka plan yeniden görününce kaldığı yerden devam eder. Başka bir arka plan
+seçildiğinde ya da terminal kapandığında, başlattığı her şeyle birlikte
+sonlandırılır. `-fps` ve `-still` geçerli değildir: hızını program belirler.
+
+Hata çıktısı atılır, çünkü ekran kabuğuna aittir. Arka plan boş kalıyorsa
+programı bir terminalde tek başına çalıştır —
+`~/.config/limoni/scenes/fireflies.py` — ve ne dediğini oku.
+
+Terminale sadece bir kareden diğerine değişen gönderilir; yani her karede
+her şeyi yeniden çizmek sorun değil. Maliyetli olan, yumuşakça kayan
+renklerdir: her karede her hücreyi değiştirirler. Renkleri `fireflies.py`
+gibi birkaç basamağa yuvarla; bir hücre sadece bir basamağı geçince yeniden
+gönderilir.
+
+---
+
+## 8. Duvar kağıdı olarak resim
 
 ```bash
 backdrop-shell -image ~/Pictures/wallpaper.jpg -opacity 0.3
@@ -307,7 +379,7 @@ açılınca bir kez, pencere boyutu değişince bir kez daha çizilir.
 
 ---
 
-## 8. Maliyeti
+## 9. Maliyeti
 
 Terminale sadece değişen karakterler gönderilir, yani bir arka plan ne kadar
 hareket ediyorsa o kadar maliyetlidir. kitty'de, fish'in arkasında, 120×40,
@@ -334,7 +406,7 @@ karakter ya da `-still`.
 
 ---
 
-## 9. Bir şey yanlış görünüyorsa
+## 10. Bir şey yanlış görünüyorsa
 
 | Gördüğün | Sebebi ve ne yapmalı |
 | :--- | :--- |
@@ -343,11 +415,12 @@ karakter ya da `-still`.
 | Bir ayar yazı olarak çiziliyor | İlk sütundan başlamalı; girintili bir `@fps` resmin parçasıdır. Sadece 3. bölümdeki tablodaki isimler ayardır. |
 | Satırlar yamuk | Tab'lar (sekizin katlarına atlar) ya da iki sütunluk karakterler (boşlukla değiştirilir). Boşluk ve tek sütunluk karakterler kullan. |
 | Hiçbir şey yok | 16 renkli bir terminal, `LIMONI_BACKDROP=off`, ya da zaten backdrop-shell'in içindesin (`backdrop-shell status` bunu söyler). |
+| Programın sahnesi boş kalıyor | Hatalarını görmek için programı tek başına çalıştır; kabuğun arkasındayken hata çıktısı atılır. `chmod +x` yapıldığını, `#!` ile başladığını ve her kareden sonra flush ettiğini kontrol et. |
 | Art bir programın arkasında kayboluyor | Kendi arka planını boyayan programlar (btop, bir vim renk teması) onu kapatır. Bu bilerek böyle. |
 
 ---
 
-## 10. Go programcıları için
+## 11. Go programcıları için
 
 Aynı art ve resimler her Limoni uygulamasında çalışır:
 

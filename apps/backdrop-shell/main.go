@@ -6,6 +6,7 @@
 //	backdrop-shell -scene synthwave -still  # a picture, not an animation
 //	backdrop-shell -image ~/Pictures/wall.jpg
 //	backdrop-shell -art my-art.txt        # your own ASCII art, still or animated
+//	backdrop-shell -scene-cmd ./my-scene.py # a scene your own program draws
 //	backdrop-shell -- htop                # any command instead of the shell
 //
 // A terminal has no layers: one grid of cells, and whatever writes last is
@@ -97,9 +98,13 @@ func main() {
 	flag.BoolVar(&opts.still, "still", s.Still, "a still picture of the scene instead of an animation")
 	flag.StringVar(&opts.image, "image", s.Image, "a picture (PNG, JPEG, GIF) as the background instead of a scene")
 	flag.StringVar(&opts.art, "art", s.Art, "a text file of ASCII art as the background; see docs/backdrop-art.md")
+	flag.StringVar(&opts.sceneCmd, "scene-cmd", s.SceneCmd, "a program that draws the background, in any language; see docs/backdrop-art.md")
 	flag.BoolVar(&opts.selection, "select", s.Select, "select and copy with the mouse without the background (false: the terminal's own selection)")
 	flag.Usage = usage
 	flag.Parse()
+	// A background named on the command line is the one wanted, over one
+	// the settings name: -scene city shows the city even with art saved.
+	flag.Visit(func(f *flag.Flag) { chooseOnly(f.Name, &opts.image, &opts.art, &opts.sceneCmd) })
 	opts.argv = flag.Args()
 	if len(opts.argv) == 0 {
 		shell := os.Getenv("SHELL")
@@ -118,10 +123,10 @@ func main() {
 		(!caps.TrueColor && !caps.Colors256) {
 		execPlain(opts.argv)
 	}
-	if opts.backdrop, err = chooseScene(opts.scene, opts.image, opts.art, opts.still); err != nil {
+	if opts.backdrop, err = chooseScene(opts.scene, opts.image, opts.art, opts.sceneCmd, opts.still); err != nil {
 		// A background that cannot be drawn is no reason to lose the shell.
 		fmt.Fprintln(os.Stderr, "backdrop-shell:", err)
-		opts.backdrop, _ = chooseScene("aurora", "", "", opts.still)
+		opts.backdrop, _ = chooseScene("aurora", "", "", "", opts.still)
 	}
 	code, err := run(opts)
 	if err != nil {
@@ -132,8 +137,9 @@ func main() {
 }
 
 // chooseScene loads the background the settings name: ASCII art first,
-// then a picture, then a built-in scene. -still freezes whichever it is.
-func chooseScene(scene, image, art string, still bool) (terminal.Backdrop, error) {
+// then a picture, then a program's scene, then a built-in one. -still
+// freezes whichever it is, but a program's: that one moves as it wants.
+func chooseScene(scene, image, art, sceneCmd string, still bool) (terminal.Backdrop, error) {
 	var bd terminal.Backdrop
 	switch {
 	case art != "":
@@ -148,6 +154,12 @@ func chooseScene(scene, image, art string, still bool) (terminal.Backdrop, error
 			return nil, err
 		}
 		bd = img
+	case sceneCmd != "":
+		c, err := newCmdScene(sceneCmd)
+		if err != nil {
+			return nil, err
+		}
+		bd = c
 	default:
 		bd = backdrop.New(scene)
 		if bd == nil {
@@ -159,6 +171,25 @@ func chooseScene(scene, image, art string, still bool) (terminal.Backdrop, error
 		bd = backdrop.Still(bd, 20*time.Second)
 	}
 	return bd, nil
+}
+
+// chooseOnly clears the other backgrounds when the flag named chose one, as
+// the order of precedence in chooseScene would otherwise overrule it. It
+// reports whether the flag chose a background.
+func chooseOnly(name string, image, art, sceneCmd *string) bool {
+	switch name {
+	case "scene":
+		*image, *art, *sceneCmd = "", "", ""
+	case "image":
+		*art, *sceneCmd = "", ""
+	case "art":
+		*image, *sceneCmd = "", ""
+	case "scene-cmd":
+		*image, *art = "", ""
+	default:
+		return false
+	}
+	return true
 }
 
 func usage() {

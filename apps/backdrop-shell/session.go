@@ -48,6 +48,7 @@ type options struct {
 	selection bool // select and copy with the mouse, without the background
 	image     string
 	art       string
+	sceneCmd  string // a program that draws the scene (scenecmd.go)
 	argv      []string
 
 	// backdrop is the scene the options above chose, loaded before the
@@ -213,12 +214,22 @@ func run(opts options) (int, error) {
 	settle.Stop()
 	var settled <-chan time.Time
 
+	defer func() { closeScene(s.opts.backdrop) }()
 	s.draw()
 	for {
 		// The scene ticks only while it can be seen: the window has focus
-		// and something on screen is left clear for it.
+		// and something on screen is left clear for it. A program drawing
+		// the scene is stopped meanwhile, and says itself when it has drawn.
+		seen := s.focused && s.sceneVisible()
+		var drawn <-chan struct{}
+		if p, ok := s.opts.backdrop.(*cmdScene); ok {
+			p.Pause(!seen)
+			if seen {
+				drawn = p.Changed()
+			}
+		}
 		var tick <-chan time.Time
-		if iv := s.interval(); iv > 0 && s.focused && s.sceneVisible() {
+		if iv := s.interval(); iv > 0 && seen {
 			if ticker == nil {
 				ticker, tickerIv = time.NewTicker(iv), iv
 			} else if iv != tickerIv {
@@ -251,6 +262,9 @@ func run(opts options) (int, error) {
 		case msg := <-inputs:
 			s.handleInput(msg)
 		case <-tick:
+			s.draw()
+		case <-drawn:
+			s.sceneFrame = -1 // a still scene is drawn again only then
 			s.draw()
 		case <-winch:
 			s.resize()

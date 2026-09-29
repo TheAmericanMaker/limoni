@@ -106,11 +106,12 @@ func (s *session) reload() {
 	if err != nil {
 		return
 	}
-	bd, err := chooseScene(set.Scene, set.Image, set.Art, set.Still)
+	bd, err := chooseScene(set.Scene, set.Image, set.Art, set.SceneCmd, set.Still)
 	if err != nil {
 		return // keep what is shown rather than show nothing
 	}
-	s.opts.scene, s.opts.image, s.opts.art = set.Scene, set.Image, set.Art
+	closeScene(s.opts.backdrop) // a program drawing the old one stops
+	s.opts.scene, s.opts.image, s.opts.art, s.opts.sceneCmd = set.Scene, set.Image, set.Art, set.SceneCmd
 	s.opts.opacity, s.opts.fps, s.opts.still = set.Opacity, set.FPS, set.Still
 	s.opts.backdrop = bd
 	if s.opts.selection != set.Select {
