@@ -16,6 +16,10 @@ import (
 // came before, and a line of box drawing turned into a line of "c". So REP
 // never reaches the emulator: repFilter writes the character out n times in
 // its place, on the way in.
+//
+// Since it follows strings anyway, it also keeps from the emulator the ones
+// holding the byte 0x9c, which its parser takes for the 8-bit ST even in
+// the middle of a UTF-8 character (see filter).
 
 // repFilter rewrites REP in a stream of terminal output. It keeps its state
 // across writes, since a sequence can be cut between two reads.
@@ -24,6 +28,10 @@ type repFilter struct {
 	seq     []byte // the sequence so far
 	last    []byte // the last graphic character, with any combining marks
 	partial []byte // a UTF-8 character cut at the end of the last write
+
+	// title receives a window title the emulator cannot be trusted with
+	// (see titleOf); nil drops it.
+	title func(string)
 }
 
 const (
@@ -108,7 +116,17 @@ func (f *repFilter) filter(in []byte) []byte {
 			if c == 0x07 || end >= 2 && f.seq[end-2] == 0x1b && c == '\\' || end > maxString {
 				// Terminated — or too long to be anything but noise, which
 				// goes on as it is rather than being held forever.
-				out = append(out, f.seq...)
+				if end <= maxString && bytes.IndexByte(f.seq, 0x9c) >= 0 {
+					// The emulator would end the string at the 0x9c and
+					// print the rest where the cursor is. A title goes
+					// to the terminal without it; anything else is lost,
+					// which beats text on the screen nobody wrote.
+					if t, ok := titleOf(f.seq); ok && f.title != nil {
+						f.title(t)
+					}
+				} else {
+					out = append(out, f.seq...)
+				}
 				f.state = repGround
 			}
 		}
@@ -116,6 +134,26 @@ func (f *repFilter) filter(in []byte) []byte {
 	// A sequence cut at the end waits for the rest; the emulator would only
 	// have waited for it too.
 	return out
+}
+
+// titleOf returns the title an OSC 0 or 2 sequence sets, terminator and
+// all given.
+func titleOf(seq []byte) (string, bool) {
+	body, ok := bytes.CutPrefix(seq, []byte("\x1b]"))
+	if !ok {
+		return "", false
+	}
+	if t, ok := bytes.CutSuffix(body, []byte{0x07}); ok {
+		body = t
+	} else {
+		body = bytes.TrimSuffix(body, []byte("\x1b\\"))
+	}
+	for _, p := range []string{"0;", "2;"} {
+		if t, ok := bytes.CutPrefix(body, []byte(p)); ok {
+			return string(t), true
+		}
+	}
+	return "", false
 }
 
 // repCount reads REP's parameter: digits only, 1 when empty or zero.

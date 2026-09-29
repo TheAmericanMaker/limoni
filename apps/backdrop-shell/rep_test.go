@@ -15,7 +15,8 @@ func TestRepIsWrittenOut(t *testing.T) {
 		{"x\x1b[?2b", "x\x1b[?2b"},                        // not REP: left alone
 		{"x\x1b]0;title b\x07\x1b[1b", "x\x1b]0;title b\x07x"},
 		{"\x1b[5b", ""},                                 // nothing to repeat
-		{"\x1b]2;Мир\x07x\x1b[2b", "\x1b]2;Мир\x07xxx"}, // М is D0 9C: 9C is not the end
+		{"\x1b]2;Mир\x07x\x1b[2b", "\x1b]2;Mир\x07xxx"}, // и is D0 B8: a string in UTF-8 goes on
+		{"\x1b]2;Мир\x07x\x1b[2b", "xxx"},               // М is D0 9C: 9C is not the end, and the title is kept out
 	}
 	for _, tc := range cases {
 		var f repFilter
@@ -49,5 +50,33 @@ func TestRepThroughTheEmulator(t *testing.T) {
 	}
 	if got := row.String(); got != "c╭───────╮" {
 		t.Fatalf("drawn as %q", got)
+	}
+}
+
+// Claude Code titles its window "✳ <session name>", and ✳ is E2 9C B3. The
+// emulator's parser ends a string at 0x9c, the 8-bit ST, even inside a UTF-8
+// character, and printed the rest of the title at the cursor: in the
+// middle of the prompt being typed. Such a title goes past the emulator to
+// the terminal, whole.
+func TestTitleWith9CStaysOffTheScreen(t *testing.T) {
+	for _, seq := range []string{
+		"\x1b]0;✳ Backdrop-shell animasyon evren dairesi\x07",
+		"\x1b]2;✻ working\x1b\\",
+		"\x1b]2;Мир\x07", // М is D0 9C
+	} {
+		s := reflowSession(60, 3, "")
+		var titles []string
+		s.rep.title = func(t string) { titles = append(titles, t) }
+		s.write1([]byte("> " + seq + "x"))
+		if got := s.all()[0]; got != "> x" {
+			t.Errorf("%q drew %q, want %q", seq, got, "> x")
+		}
+		want := seq[4 : len(seq)-1]
+		if strings.HasSuffix(seq, "\x1b\\") {
+			want = seq[4 : len(seq)-2]
+		}
+		if len(titles) != 1 || titles[0] != want {
+			t.Errorf("%q set the titles %q, want %q", seq, titles, want)
+		}
 	}
 }

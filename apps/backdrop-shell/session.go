@@ -157,9 +157,10 @@ func run(opts options) (int, error) {
 		r, g, b := bg.RGB()
 		s.emu.SetDefaultBackgroundColor(rgba(r, g, b))
 	}
+	s.rep.title = s.setTitle // titles the emulator would print (rep.go)
 	s.emu.SetCallbacks(vt.Callbacks{
 		Bell:             func() { s.pending = append(s.pending, '\a') },
-		Title:            func(t string) { s.pending = append(s.pending, ansi.SetWindowTitle(t)...) },
+		Title:            s.setTitle,
 		CursorVisibility: func(v bool) { s.cursor.hidden = !v },
 		CursorStyle:      s.setCursorShape,
 		EnableMode:       func(m ansi.Mode) { s.setChildMode(m, true) },
@@ -523,6 +524,9 @@ func (s *session) sceneVisible() bool {
 	}
 	return false
 }
+
+// setTitle passes the program's window title on to the terminal.
+func (s *session) setTitle(t string) { s.pending = append(s.pending, ansi.SetWindowTitle(t)...) }
 
 func (s *session) setCursorShape(style vt.CursorStyle, blink bool) {
 	// DECSCUSR: 1-2 block, 3-4 underline, 5-6 bar; odd blinks.
