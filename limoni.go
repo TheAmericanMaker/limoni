@@ -15,6 +15,8 @@ import (
 type (
 	Terminal        = terminal.Terminal
 	Frame           = terminal.Frame
+	Backdrop        = terminal.Backdrop
+	BackdropTicker  = terminal.BackdropTicker
 	Rect            = cell.Rect
 	Point           = cell.Point
 	Style           = cell.Style

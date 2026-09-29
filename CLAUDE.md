@@ -124,6 +124,7 @@ The package was renamed to `core/engine`; that doc is stale in places.
 | `component` | Composable view tree (VStack/HStack/Border/Flex…), zero-alloc stack solver |
 | `layout` | Flexbox and grid constraint solving |
 | `widgets` | The widget catalogue |
+| `backdrop` | Animated scenes drawn behind an application (`limoni.WithBackdrop`); `terminal.ComposeBackdrop` is the layering rule |
 | `graphics` | 3D meshes (OBJ/STL/PLY/GLB), shading, image protocol encoders |
 | `testkit` | Deterministic in-memory terminal, golden files |
 | `uitest` | Playwright-style locators and waiting assertions over the semantic tree |
@@ -133,6 +134,7 @@ The package was renamed to `core/engine`; that doc is stale in places.
 | `apps/globe` | A searchable, zoomable ASCII globe — a separate module, so it ships to nobody |
 | `apps/castle-lemonstein` | A short raycaster game in half blocks (rats, lemons, Ratatui as the boss), with synthesised sound — its own module, 0 allocs per frame through the diff |
 | `apps/lemondrop` | Falling blocks that turn to sand; a one-colour run from wall to wall clears — its own module, 0 allocs per frame through the diff |
+| `apps/backdrop-shell` | Runs the user's shell in front of a backdrop scene, in any terminal: a PTY, `charmbracelet/x/vt` for the emulated screen, and the backdrop underneath. `enable`/`disable` hook fish, bash and zsh start-up files — its own module |
 | `apps/scoreboard` | Castle Lemonstein's and Lemon Drop's shared leaderboards (`/scores`, `/drop/scores`): Vercel functions over a free Neon Postgres, or the same handler as a long-running server (Render, Railway) — its own module, so pgx reaches no importer |
 
 ---

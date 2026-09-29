@@ -110,6 +110,7 @@ type appConfig struct {
 	title            string
 	hasTitle         bool
 	keyReleases      bool
+	backdrop         Backdrop
 }
 
 // AutomationPolicy decides what an application's automation socket lets out.
@@ -189,6 +190,17 @@ func WithAutomation(socketPath string, policy AutomationPolicy) AppOption {
 	return func(c *appConfig) {
 		c.automationPath = socketPath
 		c.automationPolicy = policy
+	}
+}
+
+// WithBackdrop draws an animated scene behind the application, such as one
+// from package backdrop. Widgets that paint no background colour of their own
+// float over it; see Backdrop for the rule. The scene moves at its own pace
+// without calling the application function, so an application that only draws
+// on events still does. Terminal.SetBackdrop changes it while running.
+func WithBackdrop(bg Backdrop) AppOption {
+	return func(c *appConfig) {
+		c.backdrop = bg
 	}
 }
 
@@ -276,6 +288,9 @@ func runLoop(ctx context.Context, term *Terminal, appFn func(f *Frame, ev *Event
 		defer term.SetKeyReleases(false)
 	}
 	term.StartEventLoop()
+	if cfg.backdrop != nil {
+		term.SetBackdrop(cfg.backdrop)
+	}
 
 	// The gateway is everything that carries application state out of the
 	// process — the automation socket today. Its implementation only exists in
@@ -304,7 +319,11 @@ func runLoop(ctx context.Context, term *Terminal, appFn func(f *Frame, ev *Event
 	}
 
 	var tickerChan <-chan time.Time
+	var appInterval time.Duration
+	var bgTicker BackdropTicker
+	defer bgTicker.Stop()
 	if cfg.fps > 0 {
+		appInterval = time.Second / time.Duration(cfg.fps)
 		ticker := time.NewTicker(time.Second / time.Duration(cfg.fps))
 		defer ticker.Stop()
 		tickerChan = ticker.C
@@ -330,6 +349,12 @@ func runLoop(ctx context.Context, term *Terminal, appFn func(f *Frame, ev *Event
 	events := term.Events()
 	for running {
 		select {
+		case <-bgTicker.C(term, appInterval):
+			// The background's next frame, under the application's last one.
+			if err := term.DrawBackdrop(); err != nil {
+				return err
+			}
+
 		case ev, ok := <-events:
 			if !ok {
 				return nil

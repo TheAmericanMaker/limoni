@@ -33,6 +33,9 @@ func (p *Program) RunTerminal(ctx context.Context, term *terminal.Terminal, b *d
 	// the kitty keyboard flags.
 	defer term.RestoreModes()
 	b.StartEventLoop()
+	if p.backdrop != nil {
+		term.SetBackdrop(p.backdrop)
+	}
 
 	runDone := make(chan error, 1)
 	go func() { runDone <- p.Run(ctx) }()
@@ -45,7 +48,11 @@ func (p *Program) RunTerminal(ctx context.Context, term *terminal.Terminal, b *d
 	// of such Updates costs thirty frames a second at most. An idle Program
 	// used to wake thirty times a second to draw the same screen again.
 	var tick <-chan time.Time
+	var appInterval time.Duration
+	var bgTicker terminal.BackdropTicker
+	defer bgTicker.Stop()
 	if p.fps > 0 {
+		appInterval = time.Second / time.Duration(p.fps)
 		ticker := time.NewTicker(time.Second / time.Duration(p.fps))
 		defer ticker.Stop()
 		tick = ticker.C
@@ -62,6 +69,11 @@ func (p *Program) RunTerminal(ctx context.Context, term *terminal.Terminal, b *d
 	answered := b.ProbeAnswered()
 	for {
 		select {
+		case <-bgTicker.C(term, appInterval):
+			// The background moves on its own; View is not called for it.
+			if err := term.DrawBackdrop(); err != nil {
+				return err
+			}
 		case err := <-runDone:
 			if err != nil && !errors.Is(err, context.Canceled) {
 				return err
@@ -147,6 +159,7 @@ type programOptions struct {
 	altScreen    bool
 	catchCtrlC   bool
 	observer     Observer
+	backdrop     terminal.Backdrop
 }
 
 // Option configures a Program.
@@ -192,6 +205,14 @@ func WithoutDefaultQuitKeys() Option {
 	return WithCatchCtrlC(true)
 }
 
+// WithBackdrop makes RunTerminal draw an animated scene behind the View; see
+// terminal.Backdrop. The scene moves at its own pace without View being
+// called, so a Program without WithFPS still draws only its background while
+// idle — the cells it changes, and nothing else.
+func WithBackdrop(bg terminal.Backdrop) Option {
+	return func(opts *programOptions) { opts.backdrop = bg }
+}
+
 // WithFPS makes RunTerminal redraw continuously at fps frames a second, for a
 // View that changes without messages — one that reads the clock, say. Without
 // it RunTerminal draws only when something happens, and an idle Program does
@@ -234,6 +255,7 @@ type Program struct {
 	fps        int
 	altScreen  bool
 	catchCtrlC bool
+	backdrop   terminal.Backdrop
 
 	observer Observer
 	// step counts messages passed to Update. Guarded by modelMu, which is what
@@ -276,6 +298,7 @@ func New(options ...Option) *Program {
 		changed:        make(chan struct{}, 1),
 		onPanic:        opts.onPanic,
 		fps:            opts.fps,
+		backdrop:       opts.backdrop,
 		altScreen:      opts.altScreen,
 		catchCtrlC:     opts.catchCtrlC,
 		observer:       opts.observer,

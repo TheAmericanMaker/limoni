@@ -78,6 +78,18 @@ type Terminal struct {
 	// keyReleases asks for the kitty protocol's event types as well, so key
 	// repeats and releases are reported (SetKeyReleases).
 	keyReleases bool
+
+	// backdrop is the scene drawn behind the application (SetBackdrop).
+	backdrop Backdrop
+	// bgStart is when the backdrop was set: its clock's zero.
+	bgStart time.Time
+	// bgClock replaces time.Now for the backdrop in tests.
+	bgClock func() time.Time
+	// bgOff is set when the user turned backdrops off (LIMONI_BACKDROP).
+	bgOff bool
+	// bgLayer holds the scene, appLayer the cells the application drew in its
+	// last frame, so DrawBackdrop can compose a frame without it.
+	bgLayer, appLayer *buffer.Buffer
 }
 
 // New, belirtilen Backend'i kullanarak yeni bir Terminal yöneticisi oluşturur ve ilk tamponları tahsis eder.
@@ -106,6 +118,7 @@ func New(b *driver.Backend) (*Terminal, error) {
 		writeBuf: make([]byte, 0, 8192), // Başlangıçta 8 KB'lık yazma tamponu tahsis et
 		caps:     detected,
 		detected: detected,
+		bgOff:    backdropOff(),
 	}, nil
 }
 
@@ -368,7 +381,16 @@ func (t *Terminal) Draw(fn func(f *Frame)) error {
 	if fn != nil {
 		fn(t.frame)
 	}
+	if t.backdropActive() {
+		t.keepAppLayer()
+		t.composeBackdrop()
+	}
+	return t.present(t0)
+}
 
+// present finishes a frame whose cells are in the front buffer: it applies
+// the transition and the debug overlay, places images, and writes the diff.
+func (t *Terminal) present(t0 time.Time) error {
 	// Eğer dither geçişi aktifse, önce görüntü tamponunu harmanla.
 	// Debug HUD bundan sonra çizilir; böylece debug çizgileri ve etiketleri
 	// geçiş efekti tarafından soluklaştırılmaz veya bozulmaz.

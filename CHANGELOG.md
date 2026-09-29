@@ -9,6 +9,20 @@ a patch bump (`v0.x.y`) does not.
 ## [Unreleased]
 
 ### Added
+- Backdrops: animated scenes drawn behind an application, in any terminal
+  with 256 colours or more. `limoni.WithBackdrop` / `WithProgramBackdrop`,
+  or `Terminal.SetBackdrop`. A cell the application leaves without a
+  background colour shows the scene; a panel with its own colour hides it.
+  The scene moves on its own pace without calling the application
+  (`Terminal.DrawBackdrop`), and reaches the terminal as the ordinary cell
+  diff, so it costs only the cells it changes. Off in 16-colour terminals
+  and with `LIMONI_BACKDROP=off`.
+- Package `backdrop`: four scenes — `Aurora`, `City` (the X-Ray city without
+  the X-Ray), `Starfield`, `Synthwave` — plus `Fade`, `Dim` and `Still`.
+  Each is a pure function of time, allocates nothing a frame, and is built
+  for the diff: measured at 120×40 in truecolor, 14 to 76 KB a second, 2 to
+  15% of repainting every frame (`TestSceneTraffic`).
+- `examples/backdrop`: widgets over each scene, switched with the arrows.
 - `Viewer3DState`, an opt-in orbit camera for `Viewer3D`: dragging rotates,
   the wheel and `+`/`-` zoom, the arrow keys rotate. Its angles and distance
   add to the viewer's own, and `Draw` still allocates nothing (issue #61).

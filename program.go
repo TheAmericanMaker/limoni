@@ -144,6 +144,10 @@ func WithCommandQueue(capacity int) ProgramOption { return engine.WithCommandQue
 // Cmd panics, instead of tearing down the process.
 func WithPanicHandler(handler func(any)) ProgramOption { return engine.WithPanicHandler(handler) }
 
+// WithProgramBackdrop draws an animated scene behind the Program's View,
+// such as one from package backdrop. It mirrors WithBackdrop for Run.
+func WithProgramBackdrop(bg Backdrop) ProgramOption { return engine.WithBackdrop(bg) }
+
 // WithProgramFPS sets a continuous redraw rate for a Program, for a View that
 // changes without messages. Without it a Program draws only when something
 // happens (input, a redraw request, an Update) and uses no CPU while idle.
