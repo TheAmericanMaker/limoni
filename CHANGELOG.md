@@ -8,6 +8,17 @@ a patch bump (`v0.x.y`) does not.
 
 ## [Unreleased]
 
+### Added
+- `apps/backdrop-shell`, in its own module: your shell in front of a
+  backdrop scene, in any terminal. It runs the shell on a pseudo-terminal,
+  keeps an emulated screen (`charmbracelet/x/vt`) and lays it over the
+  scene. `install.sh` builds it and runs `backdrop-shell enable`, which
+  hooks fish, bash and zsh so every new terminal starts with it; `disable`
+  takes exactly those lines out again and `uninstall` removes everything.
+  The scene rests while the window is out of focus or covered, and a
+  `-still` one costs nothing while the shell is idle. Measured in kitty with
+  the aurora: 0.26% of one core for the wrapper.
+
 ## [v0.9.3] — 2026-09-29
 
 ### Added

@@ -246,6 +246,45 @@ jobs:
           GOOS=js GOARCH=wasm go -C "$work/lemondrop" build -o /dev/null .
           echo "ok   lemondrop builds against this checkout as well as against the release"
 
+      # backdrop-shell, the user's shell in front of a backdrop scene. Besides
+      # the usual checks, its installer runs for real in a throwaway HOME:
+      # enable must hook the shells, and uninstall must leave every start-up
+      # file exactly as it found it.
+      - name: apps/backdrop-shell
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          set -euo pipefail
+          go -C apps/backdrop-shell vet ./...
+          go -C apps/backdrop-shell test -race ./...
+          test -z "$(gofmt -l apps/backdrop-shell)" || { gofmt -l apps/backdrop-shell; exit 1; }
+          sh -n apps/backdrop-shell/install.sh
+          sh -n apps/backdrop-shell/uninstall.sh
+
+          work=$(mktemp -d)
+          cp -r apps/backdrop-shell "$work/backdrop-shell"
+          go -C "$work/backdrop-shell" mod edit -replace github.com/thebanri/limoni="$PWD"
+          go -C "$work/backdrop-shell" mod tidy
+          go -C "$work/backdrop-shell" build ./...
+          go -C "$work/backdrop-shell" test ./...
+          echo "ok   backdrop-shell builds against this checkout as well as against the release"
+
+          home=$(mktemp -d)
+          printf '# my bashrc\nalias ll="ls -l"\n' > "$home/.bashrc"
+          cp "$home/.bashrc" "$home/bashrc.orig"
+          export GOCACHE="$(go env GOCACHE)" GOMODCACHE="$(go env GOMODCACHE)"
+          export HOME="$home" XDG_CONFIG_HOME="$home/.config" GOBIN="$home/bin"
+          sh apps/backdrop-shell/install.sh -scene city -opacity 0.3
+          "$GOBIN/backdrop-shell" status | tee "$home/status"
+          grep -q "scene=city opacity=0.3" "$home/status"
+          grep -q "^bash *on" "$home/status"
+          head -1 "$home/.bashrc" | grep -q "limoni backdrop"
+          sh apps/backdrop-shell/uninstall.sh
+          cmp "$home/.bashrc" "$home/bashrc.orig"
+          test ! -e "$GOBIN/backdrop-shell"
+          test ! -e "$XDG_CONFIG_HOME/limoni/backdrop.conf"
+          echo "ok   install.sh and uninstall.sh leave the start-up files as they found them"
+
       # The scoreboard behind Castle Lemonstein's shared leaderboard: a server on
       # the standard library alone, deployed on Railway from this directory.
       - name: apps/scoreboard
