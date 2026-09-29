@@ -17,7 +17,17 @@ a patch bump (`v0.x.y`) does not.
   takes exactly those lines out again and `uninstall` removes everything.
   The scene rests while the window is out of focus or covered, and a
   `-still` one costs nothing while the shell is idle. Measured in kitty with
-  the aurora: 0.26% of one core for the wrapper.
+  the aurora, all threads: 0.54% of one core for the wrapper, 1.26% for
+  kitty. (An earlier count of 0.26% read only the main thread.)
+- `backdrop.Image` / `LoadImage`: a picture as a still wallpaper, covering
+  the screen at two pixels a cell; `backdrop-shell -image`.
+- `backdrop.Art` / `LoadArt` / `ParseArt`: ASCII art as a scene — still,
+  frame by frame (`@frame`, `@fps`), drifting (`@scroll`), tiled
+  (`@tile`), with colours and gradients (`@color`) or the ANSI colours of
+  chafa, jp2a and lolcat output; `backdrop-shell -art`, with five examples
+  in `apps/backdrop-shell/art`.
+- `docs/backdrop-art.md` (and `docs/tr/`): drawing, colouring and animating
+  your own art, pictures, and writing a scene in Go.
 
 ## [v0.9.3] — 2026-09-29
 

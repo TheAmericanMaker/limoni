@@ -124,7 +124,7 @@ The package was renamed to `core/engine`; that doc is stale in places.
 | `component` | Composable view tree (VStack/HStack/Border/Flex…), zero-alloc stack solver |
 | `layout` | Flexbox and grid constraint solving |
 | `widgets` | The widget catalogue |
-| `backdrop` | Animated scenes drawn behind an application (`limoni.WithBackdrop`); `terminal.ComposeBackdrop` is the layering rule |
+| `backdrop` | Animated scenes drawn behind an application (`limoni.WithBackdrop`), plus `Image` wallpapers and `Art` from text files (format in `docs/backdrop-art.md`); `terminal.ComposeBackdrop` is the layering rule |
 | `graphics` | 3D meshes (OBJ/STL/PLY/GLB), shading, image protocol encoders |
 | `testkit` | Deterministic in-memory terminal, golden files |
 | `uitest` | Playwright-style locators and waiting assertions over the semantic tree |

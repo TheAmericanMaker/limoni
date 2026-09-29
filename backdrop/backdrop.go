@@ -3,6 +3,10 @@
 //	limoni.Run(app, limoni.WithBackdrop(backdrop.Aurora()))
 //	limoni.RunProgram(ctx, m, limoni.WithProgramBackdrop(backdrop.City()))
 //
+// Besides the four scenes, Image makes a wallpaper of a picture, and Art a
+// scene of ASCII art — still, frame by frame, or drifting — read from a
+// plain text file; docs/backdrop-art.md shows how to make and animate one.
+//
 // Every scene is made of ordinary cells — background colours, and a glyph
 // here and there where the application leaves a cell blank — so it works in
 // any terminal with 256 colours or more, with no image protocol. How the
