@@ -18,8 +18,14 @@ Buradaki her şey iki yerde çalışır:
 ## 1. On saniyede dene
 
 ```bash
-backdrop-shell -art apps/backdrop-shell/art/cat.txt       # göz kırpan bir kedi
-backdrop-shell -art apps/backdrop-shell/art/rain.txt      # yağmur
+# Örnek art dosyaları; depoyu değil de curl ile kurduysan önce indir:
+mkdir -p ~/.config/limoni/art && cd ~/.config/limoni/art
+for f in cat rain bird clouds lemon; do
+  curl -fsSLO https://raw.githubusercontent.com/thebanri/limoni/main/apps/backdrop-shell/art/$f.txt
+done
+
+backdrop-shell -art cat.txt                               # göz kırpan bir kedi
+backdrop-shell -art rain.txt                              # yağmur
 backdrop-shell -image ~/Pictures/wallpaper.jpg            # bir resim
 ```
 

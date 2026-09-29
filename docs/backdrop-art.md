@@ -17,8 +17,14 @@ Everything here works in two places:
 ## 1. Try it in ten seconds
 
 ```bash
-backdrop-shell -art apps/backdrop-shell/art/cat.txt       # a cat that blinks
-backdrop-shell -art apps/backdrop-shell/art/rain.txt      # rain
+# The example art, if you installed with curl rather than from a checkout:
+mkdir -p ~/.config/limoni/art && cd ~/.config/limoni/art
+for f in cat rain bird clouds lemon; do
+  curl -fsSLO https://raw.githubusercontent.com/thebanri/limoni/main/apps/backdrop-shell/art/$f.txt
+done
+
+backdrop-shell -art cat.txt                               # a cat that blinks
+backdrop-shell -art rain.txt                              # rain
 backdrop-shell -image ~/Pictures/wallpaper.jpg            # a picture
 ```
 
