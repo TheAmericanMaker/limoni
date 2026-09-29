@@ -50,7 +50,13 @@ type options struct {
 	opacity float64
 	fps     float64
 	still   bool
+	image   string
+	art     string
 	argv    []string
+
+	// backdrop is the scene the options above chose, loaded before the
+	// terminal is taken over so a bad file is reported as usual.
+	backdrop terminal.Backdrop
 }
 
 type session struct {
@@ -103,15 +109,7 @@ func run(opts options) (int, error) {
 	defer driver.Restore(int(s.in.Fd()), state)
 
 	fg, bg, typeahead := terminalColors(s.in, s.out)
-	s.scene = backdrop.New(opts.scene)
-	if s.scene == nil {
-		s.scene = backdrop.Aurora()
-	}
-	if opts.still {
-		// A moment well into the scene, when everything is on stage.
-		s.scene = backdrop.Still(s.scene, 20*time.Second)
-	}
-	s.scene = backdrop.Fade(s.scene, bg, opts.opacity)
+	s.scene = backdrop.Fade(opts.backdrop, bg, opts.opacity)
 
 	cmd := exec.Command(opts.argv[0], opts.argv[1:]...)
 	cmd.Env = append(os.Environ(), envNested+"=1")

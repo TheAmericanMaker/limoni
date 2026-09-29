@@ -1,7 +1,7 @@
 # backdrop-shell
 
-Your shell, in front of an animated scene — in any terminal with 256 colours
-or more.
+Your shell, in front of an animated scene, a picture, or your own ASCII art —
+in any terminal with 256 colours or more.
 
 ```bash
 backdrop-shell                          # $SHELL over the aurora
@@ -9,8 +9,16 @@ backdrop-shell -scene city              # aurora, city, starfield, synthwave
 backdrop-shell -opacity 0.3             # quieter (0 to 1, default 0.45)
 backdrop-shell -fps 10                  # cap the scene's frame rate
 backdrop-shell -still                   # a still picture instead of an animation
+backdrop-shell -image ~/Pictures/wall.jpg   # a picture as wallpaper
+backdrop-shell -art art/cat.txt         # your own ASCII art, still or animated
 backdrop-shell -- btop                  # any command instead of the shell
 ```
+
+The files in [`art/`](art) are examples: a lemon, a cat that blinks, a bird
+that flies, clouds and rain. **[docs/backdrop-art.md](../../docs/backdrop-art.md)**
+(Türkçe: [docs/tr/backdrop-art.md](../../docs/tr/backdrop-art.md)) shows how
+to draw your own, colour it, and animate it frame by frame or across the
+screen — and how to turn the output of chafa, jp2a or lolcat into one.
 
 ## Install
 
@@ -60,7 +68,12 @@ scene = aurora     # aurora, city, starfield, synthwave
 opacity = 0.45     # 0 to 1
 fps = 0            # cap the frame rate; 0 is the scene's own
 still = false      # a still picture instead of an animation
+image =            # a picture file instead of a scene
+art =              # an ASCII art file instead of a scene; beats image
 ```
+
+`backdrop-shell enable -art ~/my-art.txt` (or `-image`, or `-scene`) switches
+between them.
 
 ## Why a wrapper
 
@@ -75,12 +88,23 @@ it.
 
 ## What it costs
 
-What reaches the terminal is Limoni's cell diff, so a scene costs only the
-cells it changes. Measured in kitty at 120×40 with the aurora, over ten
-seconds: the wrapper used 0.26% of one core, and kitty 0.83% drawing it. The
-scene stops, and the wrapper uses nothing, while the window is out of focus,
-and while a full-screen program covers the whole scene. A still scene (`-still`)
-is drawn once and costs nothing at all while the shell is idle.
+What reaches the terminal is Limoni's cell diff, so a background costs only
+the cells it changes. Measured behind fish in kitty at 120×40, twenty seconds
+each, CPU time of all threads, as a share of one core:
+
+| Background | backdrop-shell | kitty |
+| :--- | ---: | ---: |
+| a picture (`-image`) | 0.00% | 0.01% |
+| aurora, `-still` | 0.01% | 1.82% |
+| aurora | 0.54% | 1.26% |
+| synthwave | 0.77% | 1.45% |
+| `art/rain.txt` | 0.22% | 2.30% |
+
+kitty costs about the same with the aurora still and moving: most of its
+share is its own. The scene stops, and the wrapper uses nothing, while the
+window is out of focus, and while a full-screen program covers the whole
+scene. A still background is drawn once and costs nothing while the shell is
+idle. The full table is in the guide.
 
 ## Keys
 

@@ -1,0 +1,23 @@
+@fps 2
+@color #c9b8ff #8f7fe0
+@align bottom-left
+@offset 3 -1
+  /\_/\
+ ( o.o )   
+  > ^ <  ~
+ /     \ /
+@frame
+  /\_/\
+ ( o.o )
+  > ^ <   ~
+ /     \_/
+@frame
+  /\_/\
+ ( o.o )   
+  > ^ <  ~
+ /     \ /
+@frame
+  /\_/\
+ ( -.- )
+  > ^ <   ~
+ /     \_/

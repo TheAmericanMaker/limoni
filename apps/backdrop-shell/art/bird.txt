@@ -1,0 +1,10 @@
+@fps 4
+@scroll 5 0
+@align top-left
+@offset 0 3
+@color #dfe6ff
+ __   __
+   \v/
+@frame
+  _/v\_
+

@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"path/filepath"
 	"reflect"
 	"testing"
 
@@ -62,5 +63,25 @@ func TestConvertCell(t *testing.T) {
 	}
 	if c := convertCell(nil); c != (cell.Cell{Content: ' '}) {
 		t.Fatalf("missing cell: %+v", c)
+	}
+}
+
+// The example art that ships next to the program, and that the guide
+// points to, must load and choose as a background.
+func TestExampleArtLoads(t *testing.T) {
+	files, _ := filepath.Glob("art/*.txt")
+	if len(files) == 0 {
+		t.Fatal("no example art")
+	}
+	for _, f := range files {
+		if _, err := chooseScene("", "", f, false); err != nil {
+			t.Errorf("%s: %v", f, err)
+		}
+	}
+	if _, err := chooseScene("", "", "art/missing.txt", false); err == nil {
+		t.Error("a missing file was accepted")
+	}
+	if bd, _ := chooseScene("aurora", "", "art/cat.txt", true); bd.Interval() != 0 {
+		t.Error("-still did not freeze animated art")
 	}
 }

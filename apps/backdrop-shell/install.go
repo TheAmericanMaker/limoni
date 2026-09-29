@@ -37,6 +37,8 @@ type settings struct {
 	Opacity float64
 	FPS     float64
 	Still   bool
+	Image   string // a picture file; beats Scene
+	Art     string // an ASCII art file; beats Image and Scene
 }
 
 func defaultSettings() settings { return settings{Scene: "aurora", Opacity: 0.45} }
@@ -79,6 +81,10 @@ func loadSettings(path string) (settings, error) {
 			s.FPS, _ = strconv.ParseFloat(value, 64)
 		case "still":
 			s.Still = value == "true"
+		case "image":
+			s.Image = value
+		case "art":
+			s.Art = value
 		}
 	}
 	return s, sc.Err()
@@ -97,7 +103,11 @@ opacity = %g
 fps = %g
 # still: a still picture instead of an animation
 still = %t
-`, strings.Join(backdrop.Names(), ", "), s.Scene, s.Opacity, s.FPS, s.Still)
+# image: a picture file (PNG, JPEG, GIF) instead of a scene
+image = %s
+# art: a text file of ASCII art instead of a scene; it beats image
+art = %s
+`, strings.Join(backdrop.Names(), ", "), s.Scene, s.Opacity, s.FPS, s.Still, s.Image, s.Art)
 	return os.WriteFile(path, []byte(text), 0o644)
 }
 
@@ -242,6 +252,17 @@ func (h hook) remove() (bool, error) {
 	return true, writeInPlace(h.file, rest)
 }
 
+// expandHome turns a leading ~ into the home directory, for a path given in
+// a way the shell did not expand (-image=~/x.jpg).
+func expandHome(p string) string {
+	if p == "~" || strings.HasPrefix(p, "~/") {
+		if home, err := os.UserHomeDir(); err == nil {
+			return filepath.Join(home, p[1:])
+		}
+	}
+	return p
+}
+
 // selfPath is the absolute path of this binary, which the hooks run.
 func selfPath() (string, error) {
 	p, err := os.Executable()
@@ -285,12 +306,45 @@ func cmdEnable(args []string) error {
 	fl.Float64Var(&s.Opacity, "opacity", s.Opacity, "how strongly the scene shows, from 0 to 1")
 	fl.Float64Var(&s.FPS, "fps", s.FPS, "cap the scene's frame rate (0: the scene's own)")
 	fl.BoolVar(&s.Still, "still", s.Still, "a still picture instead of an animation")
+	fl.StringVar(&s.Image, "image", s.Image, "a picture (PNG, JPEG, GIF) instead of a scene")
+	fl.StringVar(&s.Art, "art", s.Art, "a text file of ASCII art instead of a scene")
 	shells := fl.String("shells", "", "comma-separated shells to hook (default: fish, bash and zsh, those installed)")
 	if err := fl.Parse(args); err != nil {
 		return err
 	}
-	if backdrop.New(s.Scene) == nil {
-		return fmt.Errorf("no scene %q; there are %s", s.Scene, strings.Join(backdrop.Names(), ", "))
+	// The background named on the command line is the one wanted: a new
+	// -scene drops an earlier picture or art, and so on. A new background
+	// also starts moving again unless -still comes with it; an old -still
+	// freezing a newly chosen animation would look like a bug.
+	stillGiven, chosen := false, false
+	fl.Visit(func(f *flag.Flag) {
+		switch f.Name {
+		case "scene":
+			s.Image, s.Art = "", ""
+			chosen = true
+		case "image":
+			s.Art = ""
+			chosen = true
+		case "art":
+			s.Image = ""
+			chosen = true
+		case "still":
+			stillGiven = true
+		}
+	})
+	if chosen && !stillGiven {
+		s.Still = false
+	}
+	// The hook runs from anywhere, so a file is kept by its full path.
+	for _, p := range []*string{&s.Image, &s.Art} {
+		if *p != "" {
+			if abs, err := filepath.Abs(expandHome(*p)); err == nil {
+				*p = abs
+			}
+		}
+	}
+	if _, err := chooseScene(s.Scene, s.Image, s.Art, s.Still); err != nil {
+		return err
 	}
 	bin, err := selfPath()
 	if err != nil {
@@ -356,6 +410,11 @@ func cmdStatus() error {
 	}
 	fmt.Printf("binary    %s\nsettings  %s\n", bin, settingsPath())
 	fmt.Printf("          scene=%s opacity=%g fps=%g still=%t\n", s.Scene, s.Opacity, s.FPS, s.Still)
+	if s.Art != "" {
+		fmt.Printf("          art=%s\n", s.Art)
+	} else if s.Image != "" {
+		fmt.Printf("          image=%s\n", s.Image)
+	}
 	for _, h := range hooks() {
 		state := "off"
 		if h.installed() {

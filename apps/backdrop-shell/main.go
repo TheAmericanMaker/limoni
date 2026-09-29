@@ -4,6 +4,8 @@
 //	backdrop-shell                        # $SHELL over the aurora
 //	backdrop-shell -scene city -opacity 0.5
 //	backdrop-shell -scene synthwave -still  # a picture, not an animation
+//	backdrop-shell -image ~/Pictures/wall.jpg
+//	backdrop-shell -art my-art.txt        # your own ASCII art, still or animated
 //	backdrop-shell -- htop                # any command instead of the shell
 //
 // A terminal has no layers: one grid of cells, and whatever writes last is
@@ -37,6 +39,7 @@ import (
 	"os/exec"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/thebanri/limoni/backdrop"
 	"github.com/thebanri/limoni/core/terminal"
@@ -66,6 +69,8 @@ func main() {
 	flag.Float64Var(&opts.opacity, "opacity", s.Opacity, "how strongly the scene shows, from 0 to 1")
 	flag.Float64Var(&opts.fps, "fps", s.FPS, "cap the scene's frame rate (0: the scene's own)")
 	flag.BoolVar(&opts.still, "still", s.Still, "a still picture of the scene instead of an animation")
+	flag.StringVar(&opts.image, "image", s.Image, "a picture (PNG, JPEG, GIF) as the background instead of a scene")
+	flag.StringVar(&opts.art, "art", s.Art, "a text file of ASCII art as the background; see docs/backdrop-art.md")
 	flag.Usage = usage
 	flag.Parse()
 	opts.argv = flag.Args()
@@ -75,10 +80,6 @@ func main() {
 			shell = "/bin/sh"
 		}
 		opts.argv = []string{shell}
-	}
-	if backdrop.New(opts.scene) == nil {
-		fmt.Fprintf(os.Stderr, "backdrop-shell: no scene %q; there are %s\n", opts.scene, strings.Join(backdrop.Names(), ", "))
-		opts.scene = "aurora"
 	}
 
 	// The plain shell wherever a scene cannot or should not be drawn: inside
@@ -90,12 +91,47 @@ func main() {
 		(!caps.TrueColor && !caps.Colors256) {
 		execPlain(opts.argv)
 	}
+	if opts.backdrop, err = chooseScene(opts.scene, opts.image, opts.art, opts.still); err != nil {
+		// A background that cannot be drawn is no reason to lose the shell.
+		fmt.Fprintln(os.Stderr, "backdrop-shell:", err)
+		opts.backdrop, _ = chooseScene("aurora", "", "", opts.still)
+	}
 	code, err := run(opts)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "backdrop-shell:", err)
 		execPlain(opts.argv)
 	}
 	os.Exit(code)
+}
+
+// chooseScene loads the background the settings name: ASCII art first,
+// then a picture, then a built-in scene. -still freezes whichever it is.
+func chooseScene(scene, image, art string, still bool) (terminal.Backdrop, error) {
+	var bd terminal.Backdrop
+	switch {
+	case art != "":
+		a, err := backdrop.LoadArt(art)
+		if err != nil {
+			return nil, err
+		}
+		bd = a
+	case image != "":
+		img, err := backdrop.LoadImage(image)
+		if err != nil {
+			return nil, err
+		}
+		bd = img
+	default:
+		bd = backdrop.New(scene)
+		if bd == nil {
+			return nil, fmt.Errorf("no scene %q; there are %s", scene, strings.Join(backdrop.Names(), ", "))
+		}
+	}
+	if still && bd.Interval() > 0 {
+		// A moment well into it, when everything is on stage.
+		bd = backdrop.Still(bd, 20*time.Second)
+	}
+	return bd, nil
 }
 
 func usage() {
