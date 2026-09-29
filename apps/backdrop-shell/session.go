@@ -1,12 +1,14 @@
 package main
 
 import (
+	"bytes"
 	"errors"
 	"io"
 	"os"
 	"os/exec"
 	"os/signal"
 	"strconv"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -34,25 +36,19 @@ const scrollbackLines = 10000
 // paste. They are passed on as they come. The rest — the alternate screen,
 // the cursor, origin mode — belong to the emulated screen and stay there.
 var forwardedModes = map[ansi.DECMode]bool{
-	ansi.ModeCursorKeys:       true,
-	ansi.ModeMouseX10:         true,
-	ansi.ModeMouseNormal:      true,
-	ansi.ModeMouseButtonEvent: true,
-	ansi.ModeMouseAnyEvent:    true,
-	ansi.ModeMouseExtSgr:      true,
-	ansi.DECMode(1005):        true, // UTF-8 mouse
-	ansi.DECMode(1015):        true, // urxvt mouse
-	ansi.ModeBracketedPaste:   true,
+	ansi.ModeCursorKeys:     true,
+	ansi.ModeBracketedPaste: true,
 }
 
 type options struct {
-	scene   string
-	opacity float64
-	fps     float64
-	still   bool
-	image   string
-	art     string
-	argv    []string
+	scene     string
+	opacity   float64
+	fps       float64
+	still     bool
+	selection bool // select and copy with the mouse, without the background
+	image     string
+	art       string
+	argv      []string
 
 	// backdrop is the scene the options above chose, loaded before the
 	// terminal is taken over so a bad file is reported as usual.
@@ -74,6 +70,21 @@ type session struct {
 		shape  int // DECSCUSR parameter, 0 for the terminal's default
 	}
 	childModes map[ansi.DECMode]bool
+	outerMouse map[ansi.DECMode]bool // mouse modes the real terminal has on
+	ownMouse   atomic.Bool           // the wrapper, not a program in the shell, has the mouse
+	sel        selection
+	splits     map[int]splitLine // lines a reflow split, by line in the history
+	// hist is the history above the screen, oldest first. The emulator's own
+	// scrollback is emptied into it after every write, so a resize can
+	// reflow it without copying every line of it (see reflow).
+	hist []uv.Line
+	// earned is how many lines at the start of hist are history proper:
+	// scrolled off by output or pushed there by clear. The lines after them
+	// a reflow pushed off the screen, and may bring back when the window
+	// has room again.
+	earned int
+	// termBg is the terminal's background colour, which the scene fades into.
+	termBg     cell.Color
 	scroll     int  // lines scrolled back into history, 0 at the live screen
 	focused    bool // the terminal window has focus
 	sceneFrame int  // the scene frame last rendered, -1 for none
@@ -97,6 +108,7 @@ func run(opts options) (int, error) {
 		out:        os.Stdout,
 		caps:       terminal.DetectCapabilities(),
 		childModes: map[ansi.DECMode]bool{},
+		outerMouse: map[ansi.DECMode]bool{},
 		focused:    true,
 		sceneFrame: -1,
 	}
@@ -109,14 +121,28 @@ func run(opts options) (int, error) {
 	defer driver.Restore(int(s.in.Fd()), state)
 
 	fg, bg, typeahead := terminalColors(s.in, s.out)
-	s.scene = backdrop.Fade(opts.backdrop, bg, opts.opacity)
+	s.termBg = bg
+	s.scene = fadeInto(opts.backdrop, bg, opts.opacity)
 
 	cmd := exec.Command(opts.argv[0], opts.argv[1:]...)
-	cmd.Env = append(os.Environ(), envNested+"=1")
-	s.ptmx, err = pty.StartWithSize(cmd, &pty.Winsize{Cols: uint16(s.w), Rows: uint16(s.h)})
+	// The shell is told which terminal is the wrapper's: its own. A terminal
+	// window opened from inside it inherits the variable but has a terminal
+	// of its own, and so gets a background of its own.
+	ptmx, tty, err := pty.Open()
 	if err != nil {
 		return 1, err
 	}
+	_ = pty.Setsize(ptmx, &pty.Winsize{Cols: uint16(s.w), Rows: uint16(s.h)})
+	cmd.Env = append(os.Environ(), envNested+"="+tty.Name())
+	cmd.Stdin, cmd.Stdout, cmd.Stderr = tty, tty, tty
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true, Setctty: true}
+	if err := cmd.Start(); err != nil {
+		ptmx.Close()
+		tty.Close()
+		return 1, err
+	}
+	tty.Close()
+	s.ptmx = ptmx
 	defer s.ptmx.Close()
 
 	s.emu = vt.NewEmulator(s.w, s.h)
@@ -148,6 +174,7 @@ func run(opts options) (int, error) {
 	// and no alternate scroll, or the wheel would send arrow keys to the
 	// shell and walk its history.
 	s.write("\x1b[?1049h\x1b[?1004h\x1b[?1007l\x1b[H\x1b[2J")
+	s.syncMouse()
 	defer s.write("\x1b[?1004l\x1b[?1049l\x1b[0 q\x1b[?25h" + resetForwardedModes())
 
 	output := make(chan []byte, 64)
@@ -163,8 +190,17 @@ func run(opts options) (int, error) {
 	signal.Notify(winch, syscall.SIGWINCH)
 	defer signal.Stop(winch)
 
+	// Settings changed while running (backdrop-shell opacity, enable,
+	// reset) arrive here. Without the socket the terminal still works; it
+	// only will not follow such changes until it is opened again.
+	reloads := make(chan struct{}, 1)
+	if stop, err := listenControl(reloads); err == nil {
+		defer stop()
+	}
+
 	s.start = time.Now()
 	var ticker *time.Ticker
+	var tickerIv time.Duration
 	defer func() {
 		if ticker != nil {
 			ticker.Stop()
@@ -181,7 +217,10 @@ func run(opts options) (int, error) {
 		var tick <-chan time.Time
 		if iv := s.interval(); iv > 0 && s.focused && s.sceneVisible() {
 			if ticker == nil {
-				ticker = time.NewTicker(iv)
+				ticker, tickerIv = time.NewTicker(iv), iv
+			} else if iv != tickerIv {
+				ticker.Reset(iv) // a reload changed the scene or its pace
+				tickerIv = iv
 			}
 			tick = ticker.C
 		} else if ticker != nil {
@@ -212,8 +251,35 @@ func run(opts options) (int, error) {
 			s.draw()
 		case <-winch:
 			s.resize()
+		case <-reloads:
+			s.reload()
 		}
 	}
+}
+
+// setTerminalColor takes an answer to the colour queries that came after
+// the wait at start-up, as it can when the terminal window is still opening:
+// the scene is faded into the real background, and the shell is told it.
+func (s *session) setTerminalColor(osc string, c cell.Color) {
+	if c.Type() != cell.ColorRGB {
+		return
+	}
+	r, g, b := c.RGB()
+	if osc == "10" {
+		s.emu.SetDefaultForegroundColor(rgba(r, g, b))
+		return
+	}
+	s.emu.SetDefaultBackgroundColor(rgba(r, g, b))
+	s.termBg = c
+	s.scene = fadeInto(s.opts.backdrop, c, s.opts.opacity)
+	s.sceneFrame = -1
+	s.draw()
+}
+
+// fadeInto shows a background at the given opacity over the terminal's own
+// background colour.
+func fadeInto(bd terminal.Backdrop, termBg cell.Color, opacity float64) terminal.Backdrop {
+	return backdrop.Fade(bd, termBg, opacity)
 }
 
 // interval is how often the scene is drawn: its own pace, or slower if the
@@ -229,7 +295,7 @@ func (s *session) interval() time.Duration {
 // feed hands the shell's output to the emulator, along with whatever else
 // is already waiting, so a burst is one frame.
 func (s *session) feed(data []byte, output chan []byte) {
-	_, _ = s.emu.Write(data)
+	s.write1(data)
 	for {
 		select {
 		case more, ok := <-output:
@@ -237,32 +303,99 @@ func (s *session) feed(data []byte, output chan []byte) {
 				s.appDirty = true
 				return
 			}
-			_, _ = s.emu.Write(more)
+			s.write1(more)
 			continue
 		default:
 		}
 		break
 	}
 	s.appDirty = true
-	s.scroll = min(s.scroll, s.emu.ScrollbackLen())
+	s.scroll = min(s.scroll, s.history())
+}
+
+// write1 hands one chunk of the shell's output to the emulator and takes
+// the lines it scrolled off into hist. "Erase saved lines" (CSI 3 J, which
+// clear sends) empties hist too: the emulator only empties its own
+// scrollback, which hist has already emptied.
+func (s *session) write1(data []byte) {
+	_, _ = s.emu.Write(data)
+	if bytes.Contains(data, []byte("\x1b[3J")) {
+		s.emu.ClearScrollback()
+		s.hist, s.splits, s.earned = nil, nil, 0
+		s.sel.active, s.sel.dragging = false, false
+		s.scroll = 0
+		return
+	}
+	s.drainHistory()
+}
+
+// drainHistory moves the lines the emulator scrolled off the screen into
+// hist, keeping at most scrollbackLines of them.
+func (s *session) drainHistory() {
+	sb := s.emu.Scrollback()
+	if sb.Len() == 0 {
+		return
+	}
+	// Output scrolling a screen no reflow has touched makes history proper;
+	// after lines a reflow pushed off, it joins those.
+	proper := s.earned == len(s.hist)
+	for _, l := range sb.Lines() {
+		if n := len(l); n > 0 && l[n-1].Width > 1 {
+			l = trimLine(l) // the scrollback drops the empty cell after a wide character
+		}
+		s.hist = append(s.hist, l)
+	}
+	sb.Clear()
+	if proper {
+		s.earned = len(s.hist)
+	}
+	if drop := len(s.hist) - scrollbackLines; drop > 0 {
+		s.dropHistory(drop)
+	}
+}
+
+// dropHistory forgets the oldest n lines, and moves what refers to lines by
+// number along with the rest.
+func (s *session) dropHistory(n int) {
+	s.hist = append(s.hist[:0:0], s.hist[n:]...)
+	if len(s.splits) > 0 {
+		moved := map[int]splitLine{}
+		for i, sp := range s.splits {
+			if i >= n {
+				moved[i-n] = sp
+			}
+		}
+		s.splits = moved
+	}
+	s.sel.anchor.line -= n
+	s.sel.head.line -= n
+	s.sel.lastSpot.line -= n
+	s.scroll = min(s.scroll, len(s.hist))
+	s.earned = max(0, s.earned-n)
 }
 
 func (s *session) handleInput(msg inputMsg) {
 	for _, ev := range msg.events {
-		switch ev {
+		switch ev.kind {
+		case inputMouse:
+			if s.ownMouse.Load() {
+				s.mouse(ev.mouse)
+			}
+		case inputColor:
+			s.setTerminalColor(ev.osc, ev.color)
 		case inputScrollUp:
 			if !s.emu.IsAltScreen() {
-				s.scroll = min(s.scroll+s.h/2, s.emu.ScrollbackLen())
+				s.scroll = min(s.scroll+s.h/2, s.history())
 				s.appDirty = true
 			}
 		case inputScrollDown:
 			s.scroll = max(0, s.scroll-s.h/2)
 			s.appDirty = true
 		case inputFocusIn, inputFocusOut:
-			s.focused = ev == inputFocusIn
+			s.focused = ev.kind == inputFocusIn
 			if s.childModes[ansi.ModeFocusEvent] {
 				report := reportFocusIn
-				if ev == inputFocusOut {
+				if ev.kind == inputFocusOut {
 					report = reportFocusOut
 				}
 				_, _ = s.ptmx.Write(report)
@@ -272,6 +405,7 @@ func (s *session) handleInput(msg inputMsg) {
 				s.scroll = 0
 				s.appDirty = true
 			}
+			s.clearSelection()
 		}
 	}
 	if s.appDirty {
@@ -284,9 +418,11 @@ func (s *session) resize() {
 	if w == s.w && h == s.h {
 		return
 	}
+	// Reflow before telling the shell, so what it draws for the new size
+	// lands on the reflowed screen.
+	s.reflow(w, h)
 	s.w, s.h = w, h
 	_ = pty.Setsize(s.ptmx, &pty.Winsize{Cols: uint16(w), Rows: uint16(h)})
-	s.emu.Resize(w, h)
 	area := cell.NewRect(0, 0, uint16(w), uint16(h))
 	s.app.Resize(area)
 	s.bg.Resize(area)
@@ -294,6 +430,7 @@ func (s *session) resize() {
 	s.sceneFrame = -1
 	s.appDirty = true
 	s.scroll = 0
+	s.sel.active, s.sel.dragging = false, false // its lines have moved
 	s.draw()
 }
 
@@ -317,6 +454,7 @@ func (s *session) draw() {
 	}
 	copy(s.front.Content, s.app.Content)
 	terminal.ComposeBackdrop(s.front.Content, s.bg.Content)
+	s.highlight()
 	s.front.Invalidate()
 
 	out := append(s.outBuf[:0], "\x1b[?2026h"...)
@@ -361,18 +499,12 @@ func (s *session) cursorAt() (x, y int) {
 // of history and screen being looked at — into Limoni cells.
 func (s *session) copyScreen() {
 	w, h := s.w, s.h
-	history := s.emu.ScrollbackLen()
+	history := s.history()
 	for y := 0; y < h; y++ {
 		line := history - s.scroll + y
 		row := s.app.Content[y*w : (y+1)*w]
 		for x := 0; x < w; x++ {
-			var c *uv.Cell
-			if line < history {
-				c = s.emu.ScrollbackCellAt(x, line)
-			} else {
-				c = s.emu.CellAt(x, line-history)
-			}
-			row[x] = convertCell(c)
+			row[x] = convertCell(s.cellAt(spot{line: line, x: x}))
 		}
 	}
 }
@@ -411,6 +543,12 @@ func (s *session) setChildMode(m ansi.Mode, on bool) {
 	}
 	s.childModes[dm] = on
 	switch {
+	case isMouseMode(dm):
+		// Who has the mouse may have changed; the terminal gets the
+		// modes of whoever does.
+		if s.outerMouse != nil {
+			s.syncMouse()
+		}
 	case dm == ansi.ModeNumericKeypad:
 		// DECKPAM / DECKPNM
 		if on {
@@ -419,13 +557,7 @@ func (s *session) setChildMode(m ansi.Mode, on bool) {
 			s.pending = append(s.pending, "\x1b>"...)
 		}
 	case forwardedModes[dm]:
-		s.pending = append(s.pending, "\x1b[?"...)
-		s.pending = strconv.AppendInt(s.pending, int64(dm), 10)
-		if on {
-			s.pending = append(s.pending, 'h')
-		} else {
-			s.pending = append(s.pending, 'l')
-		}
+		s.pending = appendMode(s.pending, dm, on)
 	}
 	if len(s.pending) > 0 && s.emu != nil {
 		// A mode change must reach the terminal before the next key it
@@ -439,17 +571,27 @@ func (s *session) setChildMode(m ansi.Mode, on bool) {
 // handles itself.
 func (s *session) readInput(inputs chan<- inputMsg) {
 	buf := make([]byte, 4096)
-	var pass []byte
+	var pass, carry []byte
 	for {
 		n, err := s.in.Read(buf)
 		if n > 0 {
 			var events []inputEvent
-			pass = splitInput(buf[:n], pass[:0], func(ev inputEvent) {
-				if ev == inputOther && len(events) > 0 && events[len(events)-1] == inputOther {
+			in := buf[:n]
+			if len(carry) > 0 {
+				in = append(carry, in...)
+			}
+			pass, carry = splitInput(in, pass[:0], s.ownMouse.Load(), func(ev inputEvent) {
+				if ev.kind == inputOther && len(events) > 0 && events[len(events)-1].kind == inputOther {
 					return
 				}
 				events = append(events, ev)
 			})
+			// buf is read into again: keep the cut-off reply in its own
+			// slice. One that never ends is not a reply; let it go.
+			if len(carry) > 1024 {
+				carry = nil
+			}
+			carry = append([]byte(nil), carry...)
 			if len(pass) > 0 {
 				_, _ = s.ptmx.Write(pass)
 			}
@@ -477,6 +619,16 @@ func readPTY(ptmx *os.File, output chan<- []byte) {
 	}
 }
 
+// appendMode appends DECSET or DECRST for a mode.
+func appendMode(out []byte, m ansi.DECMode, on bool) []byte {
+	out = append(out, "\x1b[?"...)
+	out = strconv.AppendInt(out, int64(m), 10)
+	if on {
+		return append(out, 'h')
+	}
+	return append(out, 'l')
+}
+
 func (s *session) write(str string) {
 	_, _ = s.out.WriteString(str)
 }
@@ -484,6 +636,9 @@ func (s *session) write(str string) {
 func resetForwardedModes() string {
 	out := "\x1b>"
 	for m := range forwardedModes {
+		out += "\x1b[?" + strconv.Itoa(int(m)) + "l"
+	}
+	for _, m := range mouseModes {
 		out += "\x1b[?" + strconv.Itoa(int(m)) + "l"
 	}
 	return out

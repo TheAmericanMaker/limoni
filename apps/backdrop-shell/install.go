@@ -39,9 +39,10 @@ type settings struct {
 	Still   bool
 	Image   string // a picture file; beats Scene
 	Art     string // an ASCII art file; beats Image and Scene
+	Select  bool   // the wrapper's own mouse selection, which leaves the background out
 }
 
-func defaultSettings() settings { return settings{Scene: "aurora", Opacity: 0.45} }
+func defaultSettings() settings { return settings{Scene: "aurora", Opacity: 0.45, Select: true} }
 
 func configDir() string {
 	if d := os.Getenv("XDG_CONFIG_HOME"); d != "" {
@@ -85,6 +86,8 @@ func loadSettings(path string) (settings, error) {
 			s.Image = value
 		case "art":
 			s.Art = value
+		case "select":
+			s.Select = value != "false"
 		}
 	}
 	return s, sc.Err()
@@ -107,7 +110,10 @@ still = %t
 image = %s
 # art: a text file of ASCII art instead of a scene; it beats image
 art = %s
-`, strings.Join(backdrop.Names(), ", "), s.Scene, s.Opacity, s.FPS, s.Still, s.Image, s.Art)
+# select: select and copy with the mouse, leaving the background out;
+# false gives the mouse back to the terminal, whose selection copies it too
+select = %t
+`, strings.Join(backdrop.Names(), ", "), s.Scene, s.Opacity, s.FPS, s.Still, s.Image, s.Art, s.Select)
 	return os.WriteFile(path, []byte(text), 0o644)
 }
 
@@ -140,7 +146,7 @@ func hookText(shell, bin string) string {
 	switch shell {
 	case "fish":
 		return `# Added by "backdrop-shell enable"; "backdrop-shell disable" removes this file.
-if status is-interactive; and not set -q LIMONI_BACKDROP_SHELL; and not set -q SSH_TTY; and test -x ` + q + `
+if status is-interactive; and test "$LIMONI_BACKDROP_SHELL" != (tty 2>/dev/null); and not set -q SSH_TTY; and test -x ` + q + `
     if status is-login
         exec ` + q + ` -- (status fish-path) -l
     else
@@ -150,13 +156,13 @@ end
 `
 	case "bash":
 		return blockStart + ` added by "backdrop-shell enable"; "backdrop-shell disable" removes it
-if [[ $- == *i* && -z ${LIMONI_BACKDROP_SHELL-} && -z ${SSH_TTY-} && -x ` + q + ` ]]; then
+if [[ $- == *i* && ${LIMONI_BACKDROP_SHELL-} != "$(tty 2>/dev/null)" && -z ${SSH_TTY-} && -x ` + q + ` ]]; then
     if shopt -q login_shell; then exec ` + q + ` -- "$BASH" -l; else exec ` + q + ` -- "$BASH"; fi
 fi
 ` + blockEnd + "\n"
 	case "zsh":
 		return blockStart + ` added by "backdrop-shell enable"; "backdrop-shell disable" removes it
-if [[ -o interactive && -z ${LIMONI_BACKDROP_SHELL-} && -z ${SSH_TTY-} && -x ` + q + ` ]]; then
+if [[ -o interactive && ${LIMONI_BACKDROP_SHELL-} != "$(tty 2>/dev/null)" && -z ${SSH_TTY-} && -x ` + q + ` ]]; then
     if [[ -o login ]]; then exec ` + q + ` -- zsh -l; else exec ` + q + ` -- zsh; fi
 fi
 ` + blockEnd + "\n"
@@ -290,6 +296,10 @@ func command(args []string) (handled bool, err error) {
 		return true, cmdDisable(true)
 	case "status":
 		return true, cmdStatus()
+	case "reset":
+		return true, cmdReset()
+	case "opacity":
+		return true, cmdOpacity(args[1:])
 	case "uninstall":
 		return true, cmdUninstall()
 	}
@@ -308,6 +318,7 @@ func cmdEnable(args []string) error {
 	fl.BoolVar(&s.Still, "still", s.Still, "a still picture instead of an animation")
 	fl.StringVar(&s.Image, "image", s.Image, "a picture (PNG, JPEG, GIF) instead of a scene")
 	fl.StringVar(&s.Art, "art", s.Art, "a text file of ASCII art instead of a scene")
+	fl.BoolVar(&s.Select, "select", s.Select, "select and copy with the mouse without the background")
 	shells := fl.String("shells", "", "comma-separated shells to hook (default: fish, bash and zsh, those installed)")
 	if err := fl.Parse(args); err != nil {
 		return err
@@ -378,7 +389,9 @@ func cmdEnable(args []string) error {
 	if done == 0 {
 		return errors.New("no shell to hook: none of fish, bash, zsh found (or named with -shells)")
 	}
-	fmt.Printf("Settings: %s\nOpen a new terminal to see it. \"backdrop-shell disable\" turns it off.\n", settingsPath())
+	fmt.Printf("Settings: %s\n", settingsPath())
+	reportReload()
+	fmt.Println("\"backdrop-shell disable\" turns it off.")
 	return nil
 }
 
@@ -415,6 +428,12 @@ func cmdStatus() error {
 	} else if s.Image != "" {
 		fmt.Printf("          image=%s\n", s.Image)
 	}
+	if s.Still {
+		fmt.Println("          still: the background is frozen. \"backdrop-shell enable -still=false\" makes it move.")
+	}
+	if !s.Select {
+		fmt.Println("          select=false: the terminal's own selection copies the background too.")
+	}
 	for _, h := range hooks() {
 		state := "off"
 		if h.installed() {
@@ -422,9 +441,20 @@ func cmdStatus() error {
 		}
 		fmt.Printf("%-9s %-3s  %s\n", h.shell, state, h.file)
 	}
-	if os.Getenv(envNested) != "" {
+	if nested() {
 		fmt.Println("This shell is running inside backdrop-shell.")
 	}
+	return nil
+}
+
+// cmdReset puts the settings back to the defaults — the aurora, moving —
+// and leaves the shells as they are: on stays on, off stays off.
+func cmdReset() error {
+	if err := defaultSettings().save(settingsPath()); err != nil {
+		return err
+	}
+	fmt.Printf("Settings are back to the defaults (%s).\n", settingsPath())
+	reportReload()
 	return nil
 }
 

@@ -20,7 +20,7 @@ func fakeHome(t *testing.T) string {
 
 func TestSettingsRoundTrip(t *testing.T) {
 	fakeHome(t)
-	want := settings{Scene: "city", Opacity: 0.3, FPS: 12, Still: true}
+	want := settings{Scene: "city", Opacity: 0.3, FPS: 12, Still: true, Select: true}
 	if err := want.save(settingsPath()); err != nil {
 		t.Fatal(err)
 	}
@@ -89,9 +89,9 @@ func TestHookBlocksAreAddedOnceAndRemovedCleanly(t *testing.T) {
 // the binary with the right arguments; one already inside does not.
 func TestHooksHandOverInRealShells(t *testing.T) {
 	dir := t.TempDir()
-	marker := filepath.Join(dir, "ran")
+	markerFile := filepath.Join(dir, "ran")
 	bin := filepath.Join(dir, "fake-backdrop-shell")
-	script := "#!/bin/sh\nprintf '%s\\n' \"$@\" > '" + marker + "'\n"
+	script := "#!/bin/sh\nprintf '%s\\n' \"$@\" > '" + markerFile + "'\n"
 	if err := os.WriteFile(bin, []byte(script), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -119,8 +119,11 @@ func TestHooksHandOverInRealShells(t *testing.T) {
 		if out, err := exec.Command(path, check[tc.shell]...).CombinedOutput(); err != nil {
 			t.Fatalf("%s rejects the hook: %v\n%s", tc.shell, err, out)
 		}
-		run := func(nested, interactive bool) (string, bool) {
-			os.Remove(marker)
+		// The terminal these shells run on, as tty names it: the marker a
+		// backdrop-shell sets for the shell inside it names its terminal.
+		here, _ := exec.Command("tty").Output()
+		run := func(marker string, interactive bool) (string, bool) {
+			os.Remove(markerFile)
 			source := map[string]string{"bash": ". ", "zsh": ". ", "fish": "source "}[tc.shell]
 			var args []string
 			for _, a := range tc.args[:len(tc.args)-1] {
@@ -131,21 +134,26 @@ func TestHooksHandOverInRealShells(t *testing.T) {
 			args = append(args, source+hookFile+"; true")
 			cmd := exec.Command(path, args...)
 			cmd.Env = withoutEnv(withoutEnv(os.Environ(), "SSH_TTY"), envNested)
-			if nested {
-				cmd.Env = append(cmd.Env, envNested+"=1")
+			if marker != "" {
+				cmd.Env = append(cmd.Env, envNested+"="+marker)
 			}
 			_ = cmd.Run()
-			b, err := os.ReadFile(marker)
+			b, err := os.ReadFile(markerFile)
 			return string(b), err == nil
 		}
-		got, ran := run(false, true)
+		got, ran := run("", true)
 		if !ran || !strings.HasPrefix(got, "--\n") || !strings.Contains(got, tc.want) {
 			t.Errorf("%s: interactive shell did not hand over (ran=%v, args %q)", tc.shell, ran, got)
 		}
-		if _, ran := run(true, true); ran {
+		if _, ran := run(strings.TrimSpace(string(here)), true); ran {
 			t.Errorf("%s: a shell already inside backdrop-shell handed over again", tc.shell)
 		}
-		if _, ran := run(false, false); ran {
+		// A terminal window opened from inside one inherits the marker, but
+		// it names another terminal: that window gets a background too.
+		if _, ran := run("/dev/pts/9999", true); !ran {
+			t.Errorf("%s: a new terminal opened from inside backdrop-shell was left without one", tc.shell)
+		}
+		if _, ran := run("", false); ran {
 			t.Errorf("%s: a script (a shell that is not interactive) handed over", tc.shell)
 		}
 	}

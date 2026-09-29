@@ -37,7 +37,12 @@ backdrop-shell enable -scene aurora                        # back to a built-in 
 ```
 
 `backdrop-shell status` shows what is set; `backdrop-shell disable` turns it
-off.
+off. Changes apply at once to every open terminal. To make the background
+quieter or stronger at any time:
+
+```bash
+backdrop-shell opacity 0.3     # or +0.1 / -0.1 to step it
+```
 
 ---
 
@@ -329,7 +334,8 @@ characters that change, or `-still`.
 
 | You see | Why, and what to do |
 | :--- | :--- |
-| The art is frozen | `still = true` in the settings (`backdrop-shell status`). Choosing a new background with `enable -art …` clears it; `-still=false` does too. |
+| The art is frozen | `still = true` in the settings (`backdrop-shell status` says so). `backdrop-shell enable -still=false` makes it move; choosing a new background with `enable -art …` clears it too; `backdrop-shell reset` starts over. |
+| Copying takes the art with it | That is the terminal's own selection (Shift+drag, or `select = false`). A plain drag selects in backdrop-shell and copies only what the shell wrote. |
 | A setting is drawn as text | It must start at the first column; an indented `@fps` is part of the picture. Only the names in the table in section 3 are settings. |
 | Rows are ragged | Tabs (they jump to multiples of eight) or two-column characters (replaced by a space). Use spaces and one-column characters. |
 | Nothing at all | A 16-colour terminal, `LIMONI_BACKDROP=off`, or you are inside backdrop-shell already (`backdrop-shell status` says so). |

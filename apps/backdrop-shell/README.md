@@ -53,8 +53,23 @@ are left alone, and if the binary is gone the shell starts as usual.
 backdrop-shell disable      # new terminals open without it; stays installed
 backdrop-shell enable       # back on (flags change the settings: -scene city ...)
 backdrop-shell status       # what is on, and the settings
+backdrop-shell opacity 0.3  # how strongly it shows; +0.1 / -0.1 step it
+backdrop-shell reset        # the default settings again: the aurora, moving
 backdrop-shell uninstall    # remove the lines, the settings and the binary
 ```
+
+**The background stopped moving?** `still = true` is set — `status` says so.
+`backdrop-shell enable -still=false` makes it move again, and choosing a
+background (`enable -scene …`, `-art …`, `-image …`) without `-still` does
+too. `backdrop-shell reset` starts over from the defaults.
+
+Changes apply at once to every open terminal, not only to new ones: each
+running wrapper listens on a socket of its own in `$XDG_RUNTIME_DIR` (a
+directory only you can enter), and `opacity`, `enable` and `reset` ask them
+all to read the settings again. A terminal window opened from inside one
+gets a background of its own: the marker the wrapper leaves for its shell
+names its own terminal, so a new window, which inherits it, is not mistaken
+for the inside of the old one.
 
 `uninstall.sh` next to `install.sh` does the last one, also over `curl | sh`.
 `disable` takes out exactly the lines `enable` put in; the rest of each file is
@@ -70,6 +85,7 @@ fps = 0            # cap the frame rate; 0 is the scene's own
 still = false      # a still picture instead of an animation
 image =            # a picture file instead of a scene
 art =              # an ASCII art file instead of a scene; beats image
+select = true      # select with the mouse, leaving the background out
 ```
 
 `backdrop-shell enable -art ~/my-art.txt` (or `-image`, or `-scene`) switches
@@ -106,13 +122,57 @@ window is out of focus, and while a full-screen program covers the whole
 scene. A still background is drawn once and costs nothing while the shell is
 idle. The full table is in the guide.
 
-## Keys
+## Mouse and keys
 
-- **Shift+PageUp / Shift+PageDown** scroll back through history. The
-  terminal's own scrollback is set aside while the wrapper runs (it draws on
-  the alternate screen); typing returns to the live screen.
+- **Drag** selects, and letting go copies — only what the shell wrote, never
+  the stars or the art behind it. **Double-click** takes a word (a whole path
+  or address), **triple-click** a line. Typing drops the highlight.
+- **Middle-click** pastes what was copied last.
+- **The wheel**, and **Shift+PageUp / Shift+PageDown**, scroll back through
+  history. The terminal's own scrollback is set aside while the wrapper runs
+  (it draws on the alternate screen); typing returns to the live screen. In
+  a full-screen program without mouse support (less, man) the wheel sends
+  arrow keys, as terminals do.
+
+Why the wrapper selects instead of the terminal: a terminal copies whatever
+is in the cells, and the background's characters are in the cells like any
+text. The copy goes through the system's clipboard tool — `wl-copy` on
+Wayland, `xclip` or `xsel` on X11, `pbcopy` on macOS — onto the clipboard
+(Ctrl+V) and the primary selection (middle-click in other programs), so it
+works in any terminal and for any length. Over SSH, or with none of those
+installed, it goes to the terminal as OSC 52, which Alacritty, kitty,
+WezTerm, foot and Ghostty accept. A program that wants the mouse itself —
+vim with `mouse=a`, btop — gets it while it runs. **Shift+drag** still makes
+the terminal's own selection, background included; `-select=false` (or
+`select = false` in the settings) leaves the mouse to the terminal
+altogether.
 
 Everything else goes to the shell as the terminal sent it.
+
+## Resizing
+
+Nothing the shell wrote is lost when the window changes size. A narrower
+window wraps long lines onto the next row instead of cutting them, and a
+wider one joins the rows it split — fastfetch's output survives a trip down
+to 30 columns and back as it was. A shorter window moves the top rows into
+the history instead of dropping the bottom ones, where the prompt is. A
+line a program itself let wrap stays split when the window grows again;
+kitty and Alacritty would join that too.
+
+The history is kept by the wrapper rather than the emulator, so reflowing
+10,000 lines of it takes about 2 ms and a drag stays smooth. `clear` erases
+it, as it does in the terminal itself.
+
+## kitty
+
+- kitty tells programs a new window size only 0.1 s after a drag pauses
+  (`resize_debounce_time`), for every program, not only this one; until
+  then the part of the window that grew stays blank. With
+  `resize_debounce_time 0 0` in `~/.config/kitty/kitty.conf` it follows the
+  drag.
+- `hide_window_decorations yes` there removes the title bar and borders
+  (`titlebar-only` keeps the borders for resizing). A kitty window opened
+  from inside a backdrop-shell — `kitty &` — gets a background of its own.
 
 ## Off switches
 

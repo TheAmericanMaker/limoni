@@ -8,6 +8,41 @@ a patch bump (`v0.x.y`) does not.
 
 ## [Unreleased]
 
+### Added
+- `backdrop-shell opacity 0.3` (or `+0.1`, `-0.1`), and settings changes in
+  general, apply at once to every open terminal: each running wrapper
+  listens on its own socket in the user's runtime directory and reads the
+  settings again when asked.
+
+### Fixed
+- `backdrop-shell`: copying copied the background too — the terminal's
+  selection takes whatever is in the cells, stars and art included. The
+  wrapper now selects with the mouse itself (drag, double-click for a word,
+  triple-click for a line) and copies only the shell's text — through the
+  system's clipboard tool (wl-copy, xclip, xsel, pbcopy) onto the clipboard
+  and the primary selection, and with OSC 52 over SSH. OSC 52 alone failed
+  to copy fastfetch's output in Alacritty. The wheel scrolls the history
+  and middle-click pastes. A program that
+  asks for the mouse gets it; Shift+drag and `-select=false` leave
+  selection to the terminal.
+- `backdrop-shell`: the terminal's answers to the start-up colour queries,
+  when they came after the wait (a window still opening), were passed to
+  the shell as typing and left stray letters on the command line. Replies
+  are never passed on now, and a late colour is still used.
+- `backdrop-shell`: narrowing the window lost what was on the right for
+  good — fastfetch's output was cut in half — because the emulator cuts
+  lines at the new width, and a shorter window dropped the bottom rows.
+  The wrapper now reflows, as kitty and Alacritty do: long lines wrap
+  instead, a wider window joins the lines it split, and a shorter one moves
+  the top rows into the history. The history is kept by the wrapper, so a
+  reflow over 10,000 lines takes 2 ms, not 50.
+- `backdrop-shell`: a terminal window opened from inside one (`kitty &`)
+  had no background: it inherited the marker that says "already inside".
+  The marker now names the wrapper's own terminal, and is ignored on any
+  other.
+- `backdrop-shell`: a background set to `still` gave no hint how to undo
+  it. `status` says how, and `backdrop-shell reset` restores the defaults.
+
 ## [v0.9.4] — 2026-09-29
 
 ### Added

@@ -38,7 +38,12 @@ backdrop-shell enable -scene aurora                        # hazır sahneye geri
 ```
 
 `backdrop-shell status` neyin ayarlı olduğunu gösterir, `backdrop-shell
-disable` kapatır.
+disable` kapatır. Değişiklikler açık olan her terminale anında uygulanır.
+Arka planı istediğin an daha sönük ya da daha belirgin yapmak için:
+
+```bash
+backdrop-shell opacity 0.3     # ya da adım adım: +0.1 / -0.1
+```
 
 ---
 
@@ -333,7 +338,8 @@ karakter ya da `-still`.
 
 | Gördüğün | Sebebi ve ne yapmalı |
 | :--- | :--- |
-| Art donmuş | Ayarlarda `still = true` var (`backdrop-shell status`). `enable -art …` ile yeni bir arka plan seçmek bunu sıfırlar; `-still=false` da. |
+| Art donmuş | Ayarlarda `still = true` var (`backdrop-shell status` bunu söyler). `backdrop-shell enable -still=false` hareket ettirir; `enable -art …` ile yeni bir arka plan seçmek de sıfırlar; `backdrop-shell reset` her şeyi baştan alır. |
+| Kopyalayınca art da geliyor | Bu terminalin kendi seçimi (Shift+sürükle ya da `select = false`). Düz sürükleme backdrop-shell'de seçer ve sadece kabuğun yazdığını kopyalar. |
 | Bir ayar yazı olarak çiziliyor | İlk sütundan başlamalı; girintili bir `@fps` resmin parçasıdır. Sadece 3. bölümdeki tablodaki isimler ayardır. |
 | Satırlar yamuk | Tab'lar (sekizin katlarına atlar) ya da iki sütunluk karakterler (boşlukla değiştirilir). Boşluk ve tek sütunluk karakterler kullan. |
 | Hiçbir şey yok | 16 renkli bir terminal, `LIMONI_BACKDROP=off`, ya da zaten backdrop-shell'in içindesin (`backdrop-shell status` bunu söyler). |

@@ -19,8 +19,11 @@
 // the cells it changes. It stops while the window is out of focus, and while
 // a full-screen program covers it all; a still scene costs nothing at all.
 //
-// Shift+PageUp and Shift+PageDown scroll back through the history, since the
-// terminal's own scrollback is set aside while the wrapper runs.
+// The wheel, Shift+PageUp and Shift+PageDown scroll back through the
+// history, since the terminal's own scrollback is set aside while the
+// wrapper runs. Dragging selects and copies only what the shell wrote —
+// the terminal's own selection would copy the background's characters too
+// (see select.go).
 //
 // To have it in every new terminal, "backdrop-shell enable" adds a few marked
 // lines to the start-up files of fish, bash and zsh; "backdrop-shell disable"
@@ -46,9 +49,32 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-// envNested is set for the shell, so a backdrop-shell started inside it
-// runs the plain shell instead of a scene inside a scene.
+// envNested names the terminal of a running backdrop-shell, for the shell
+// inside it: a backdrop-shell started on that same terminal runs the plain
+// shell instead of a scene inside a scene. On any other terminal — a window
+// opened from inside, which inherits the variable — it is ignored.
 const envNested = "LIMONI_BACKDROP_SHELL"
+
+// nested reports whether this process runs on the terminal of a
+// backdrop-shell already.
+func nested() bool {
+	v := os.Getenv(envNested)
+	return v != "" && v == stdinTTY()
+}
+
+// stdinTTY is the name of the terminal on standard input, "" if none.
+func stdinTTY() string {
+	if name, err := os.Readlink("/proc/self/fd/0"); err == nil {
+		return name
+	}
+	cmd := exec.Command("tty")
+	cmd.Stdin = os.Stdin
+	out, err := cmd.Output()
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(out))
+}
 
 func main() {
 	if handled, err := command(os.Args[1:]); handled {
@@ -71,6 +97,7 @@ func main() {
 	flag.BoolVar(&opts.still, "still", s.Still, "a still picture of the scene instead of an animation")
 	flag.StringVar(&opts.image, "image", s.Image, "a picture (PNG, JPEG, GIF) as the background instead of a scene")
 	flag.StringVar(&opts.art, "art", s.Art, "a text file of ASCII art as the background; see docs/backdrop-art.md")
+	flag.BoolVar(&opts.selection, "select", s.Select, "select and copy with the mouse without the background (false: the terminal's own selection)")
 	flag.Usage = usage
 	flag.Parse()
 	opts.argv = flag.Args()
@@ -86,7 +113,7 @@ func main() {
 	// backdrop-shell already, turned off, not on a terminal, or on one with
 	// 16 colours, where a gradient is blocks of eight.
 	caps := terminal.DetectCapabilities()
-	if os.Getenv(envNested) != "" || os.Getenv("LIMONI_BACKDROP") == "off" ||
+	if nested() || os.Getenv("LIMONI_BACKDROP") == "off" ||
 		!isTerminal(os.Stdin) || !isTerminal(os.Stdout) ||
 		(!caps.TrueColor && !caps.Colors256) {
 		execPlain(opts.argv)
@@ -140,6 +167,8 @@ func usage() {
   backdrop-shell enable [flags]              start it in every new terminal
   backdrop-shell disable                     stop starting it; stays installed
   backdrop-shell status                      what is on, and the settings
+  backdrop-shell reset                       the default settings again: the aurora, moving
+  backdrop-shell opacity [0.3 | +0.1 | -0.1] show or change how strongly the background shows
   backdrop-shell uninstall                   disable, and remove the settings and this binary
 
 Flags (enable saves them as the defaults):

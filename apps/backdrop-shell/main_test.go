@@ -13,14 +13,14 @@ import (
 
 func TestSplitInputKeepsBackWhatTheWrapperHandles(t *testing.T) {
 	in := []byte("ls\x1b[5;2~\x1b[A\x1b[I\x1b[6;2~x\x1b[O")
-	var events []inputEvent
-	pass := splitInput(in, nil, func(ev inputEvent) { events = append(events, ev) })
+	var kinds []inputKind
+	pass, _ := splitInput(in, nil, false, func(ev inputEvent) { kinds = append(kinds, ev.kind) })
 	if want := []byte("ls\x1b[Ax"); !bytes.Equal(pass, want) {
 		t.Fatalf("passed %q, want %q", pass, want)
 	}
-	want := []inputEvent{inputOther, inputScrollUp, inputOther, inputOther, inputFocusIn, inputScrollDown, inputOther, inputFocusOut}
-	if !reflect.DeepEqual(events, want) {
-		t.Fatalf("events %v, want %v", events, want)
+	want := []inputKind{inputOther, inputScrollUp, inputOther, inputOther, inputFocusIn, inputScrollDown, inputOther, inputFocusOut}
+	if !reflect.DeepEqual(kinds, want) {
+		t.Fatalf("events %v, want %v", kinds, want)
 	}
 }
 
@@ -83,5 +83,44 @@ func TestExampleArtLoads(t *testing.T) {
 	}
 	if bd, _ := chooseScene("aurora", "", "art/cat.txt", true); bd.Interval() != 0 {
 		t.Error("-still did not freeze animated art")
+	}
+}
+
+// The terminal's answers to the wrapper's colour queries can arrive after
+// the wait at start-up, while the window is still opening. They must never
+// reach the shell as typing — they did, as stray hex letters on the command
+// line — and a colour in one is still put to use.
+func TestLateTerminalRepliesNeverReachTheShell(t *testing.T) {
+	var colors []inputEvent
+	emit := func(ev inputEvent) {
+		if ev.kind == inputColor {
+			colors = append(colors, ev)
+		}
+	}
+	in := []byte("ls\x1b]10;rgb:dddd/dddd/dddd\x1b\\\x1b]11;rgb:1e1e/1e1e/2e2e\x07\x1b[?62;22cx")
+	pass, carry := splitInput(in, nil, false, emit)
+	if string(pass) != "lsx" || carry != nil {
+		t.Fatalf("passed %q, carry %q", pass, carry)
+	}
+	if len(colors) != 2 || colors[1].osc != "11" || colors[1].color != cell.NewColorRGB(0x1e, 0x1e, 0x2e) {
+		t.Fatalf("colours %+v", colors)
+	}
+
+	// Cut across two reads: nothing leaks from either half. A read that
+	// ends on "ESC" or "ESC ]" cannot be told from the Escape key or Alt+],
+	// which must not wait; the terminal writes a reply whole, so those two
+	// cuts are left out.
+	whole := []byte("\x1b]11;rgb:1e1e/1e1e/2e2e\x1b\\a")
+	for cut := 3; cut < len(whole)-1; cut++ {
+		p1, c1 := splitInput(whole[:cut], nil, false, func(inputEvent) {})
+		p2, c2 := splitInput(append(c1, whole[cut:]...), p1, false, func(inputEvent) {})
+		if string(p2) != "a" || c2 != nil {
+			t.Fatalf("cut at %d: passed %q, carry %q", cut, p2, c2)
+		}
+	}
+
+	// Keys that begin the same way still arrive: Alt+] is ESC ] alone.
+	if pass, carry := splitInput([]byte("\x1b]"), nil, false, func(inputEvent) {}); string(pass) != "\x1b]" || carry != nil {
+		t.Fatalf("Alt+] became %q, carry %q", pass, carry)
 	}
 }
