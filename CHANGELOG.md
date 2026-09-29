@@ -8,6 +8,8 @@ a patch bump (`v0.x.y`) does not.
 
 ## [Unreleased]
 
+## [v0.9.4] — 2026-09-29
+
 ### Added
 - `apps/backdrop-shell`, in its own module: your shell in front of a
   backdrop scene, in any terminal. It runs the shell on a pseudo-terminal,
@@ -455,7 +457,8 @@ a patch bump (`v0.x.y`) does not.
 ## v0.1.0 – v0.1.8
 See the [GitHub releases](https://github.com/thebanri/limoni/releases).
 
-[Unreleased]: https://github.com/thebanri/limoni/compare/v0.9.3...HEAD
+[Unreleased]: https://github.com/thebanri/limoni/compare/v0.9.4...HEAD
+[v0.9.4]: https://github.com/thebanri/limoni/compare/v0.9.3...v0.9.4
 [v0.9.3]: https://github.com/thebanri/limoni/compare/v0.9.2...v0.9.3
 [v0.9.2]: https://github.com/thebanri/limoni/compare/v0.9.1...v0.9.2
 [v0.9.1]: https://github.com/thebanri/limoni/compare/v0.9.0...v0.9.1
