@@ -129,12 +129,15 @@ func TestRunTerminalPacesChangesThatDidNotAskForRedraw(t *testing.T) {
 		t.Fatalf("a change after a still second took %v to draw; want it at once", d)
 	}
 
-	io.in <- []byte("xxx") // within a frame of the last one
-	time.Sleep(idleFrame / 2)
-	if n := m.drawn.Load(); n != 1 {
-		t.Fatalf("changes within a frame of the last were drawn at once (showing %d)", n)
-	}
+	// Within a frame of the last one, so held to the end of that frame.
+	// When it shows is observed by polling, which a stalled runner can only
+	// make later: a pause of the test cannot pass for a frame drawn early.
+	sent = time.Now()
+	io.in <- []byte("xxx")
 	waitUntil(t, func() bool { return m.drawn.Load() == 4 })
+	if d := time.Since(sent); d < idleFrame/2 {
+		t.Fatalf("changes within a frame of the last were drawn after %v; want them held to the end of the frame", d)
+	}
 	time.Sleep(100 * time.Millisecond)
 	if n := m.views.Load(); n != 3 {
 		t.Fatalf("drew %d frames; want the first, one for x, one for xxx", n)
@@ -145,11 +148,11 @@ func TestRunTerminalPacesChangesThatDidNotAskForRedraw(t *testing.T) {
 // changes on its own.
 func TestRunTerminalKeepsTheFrameRateItWasGiven(t *testing.T) {
 	t.Setenv("LIMONI_PROBE", "0")
+	// Ten frames with no input at all, which a Program without a frame rate
+	// never draws; waited for rather than counted over a fixed sleep, since
+	// a stalled CI runner (Windows) delivered six ticks in 300ms.
 	m, _ := startIdle(t, WithFPS(100))
-	time.Sleep(300 * time.Millisecond)
-	if n := m.views.Load(); n < 10 {
-		t.Fatalf("drew %d frames in 300ms at 100 fps", n)
-	}
+	waitUntil(t, func() bool { return m.views.Load() >= 10 })
 }
 
 // Answers to the capability probe can land after the first frame, over SSH
