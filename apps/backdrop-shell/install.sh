@@ -49,3 +49,18 @@ bin="$bindir/backdrop-shell"
 [ -x "$bin" ] || fail "the build finished but $bin is not there"
 say "Installed $bin"
 "$bin" enable "$@"
+
+# Ubuntu, Kubuntu and others leave Go's bin directory out of PATH. The
+# terminals backdrop-shell runs in get it added, but a plain shell (after
+# "backdrop-shell disable", or over SSH) would not find the command.
+case ":$PATH:" in
+*":$bindir:"*) ;;
+*)
+	say ""
+	say "Note: $bindir is not in your PATH. Terminals opened with the background"
+	say "have it; to run backdrop-shell anywhere else, add this line to your"
+	say "shell's start-up file (~/.bashrc, ~/.zshrc):"
+	say "    export PATH=\"\$PATH:$bindir\""
+	say "or for fish: fish_add_path $bindir"
+	;;
+esac

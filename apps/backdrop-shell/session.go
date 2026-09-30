@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"path/filepath"
 	"strconv"
 	"sync/atomic"
 	"syscall"
@@ -88,9 +89,10 @@ type session struct {
 	termBg cell.Color
 	// rep writes out REP for the emulator, which repeats only ASCII (rep.go).
 	rep        repFilter
-	scroll     int  // lines scrolled back into history, 0 at the live screen
-	focused    bool // the terminal window has focus
-	sceneFrame int  // the scene frame last rendered, -1 for none
+	name       procName // the foreground program's name, taken on for the terminal's tab
+	scroll     int      // lines scrolled back into history, 0 at the live screen
+	focused    bool     // the terminal window has focus
+	sceneFrame int      // the scene frame last rendered, -1 for none
 
 	app, bg, front, back *buffer.Buffer
 	appDirty             bool
@@ -136,7 +138,8 @@ func run(opts options) (int, error) {
 		return 1, err
 	}
 	_ = pty.Setsize(ptmx, &pty.Winsize{Cols: uint16(s.w), Rows: uint16(s.h)})
-	cmd.Env = append(os.Environ(), envNested+"="+tty.Name())
+	exe, _ := os.Executable()
+	cmd.Env = append(withOwnDir(os.Environ(), exe), envNested+"="+tty.Name())
 	cmd.Stdin, cmd.Stdout, cmd.Stderr = tty, tty, tty
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true, Setctty: true}
 	if err := cmd.Start(); err != nil {
@@ -146,6 +149,10 @@ func run(opts options) (int, error) {
 	}
 	tty.Close()
 	s.ptmx = ptmx
+	// Named after the shell from the start; the shell's first output, by
+	// when it has surely replaced the forked copy of this process, is when
+	// its own name can be read (procname.go).
+	s.name.set(filepath.Base(opts.argv[0]))
 	defer s.ptmx.Close()
 
 	s.emu = vt.NewEmulator(s.w, s.h)
@@ -248,6 +255,7 @@ func run(opts options) (int, error) {
 				return exitCode(cmd), nil
 			}
 			s.feed(data, output)
+			s.name.update(s.ptmx)
 			if since := time.Since(s.lastFrame); since < minFrame {
 				if settled == nil {
 					settle.Reset(minFrame - since)
@@ -615,6 +623,10 @@ func (s *session) readInput(inputs chan<- inputMsg) {
 			carry = append([]byte(nil), carry...)
 			if len(pass) > 0 {
 				_, _ = s.ptmx.Write(pass)
+				if bytes.IndexByte(pass, '\r') >= 0 {
+					// A command may be starting; by then it has.
+					time.AfterFunc(150*time.Millisecond, func() { s.name.update(s.ptmx) })
+				}
 			}
 			if len(events) > 0 {
 				inputs <- inputMsg{events: events}
