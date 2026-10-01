@@ -23,6 +23,16 @@ func TestParseKittyKeyboardKeys(t *testing.T) {
 		{"\x1b[97;65u", KeyEvent{Type: KeyRune, Ch: 'a'}},
 		{"\x1b[57401u", KeyEvent{Type: KeyRune, Ch: '2'}}, // keypad 2
 		{"\x1b[57414u", KeyEvent{Type: KeyEnter}},         // keypad Enter
+		// The keypad's other keys type their character: Alacritty, kitty and
+		// WezTerm send its / as KP_DIVIDE, which was dropped.
+		{"\x1b[57409u", KeyEvent{Type: KeyRune, Ch: '.'}},
+		{"\x1b[57410u", KeyEvent{Type: KeyRune, Ch: '/'}},
+		{"\x1b[57411u", KeyEvent{Type: KeyRune, Ch: '*'}},
+		{"\x1b[57412u", KeyEvent{Type: KeyRune, Ch: '-'}},
+		{"\x1b[57413u", KeyEvent{Type: KeyRune, Ch: '+'}},
+		{"\x1b[57415u", KeyEvent{Type: KeyRune, Ch: '='}},
+		{"\x1b[57416u", KeyEvent{Type: KeyRune, Ch: ','}},
+		{"\x1b[57413;5u", KeyEvent{Type: KeyRune, Ch: '+', Ctrl: true}},
 		{"\x1b[1;5P", KeyEvent{Type: KeyF1, Ctrl: true}},
 		{"\x1b[1;2Q", KeyEvent{Type: KeyF2, Shift: true}},
 		{"\x1b[1;3S", KeyEvent{Type: KeyF4, Alt: true}},

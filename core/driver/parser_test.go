@@ -202,6 +202,23 @@ func TestParseNavigationAndEditingKeys(t *testing.T) {
 	}
 }
 
+// In application keypad mode (DECKPAM) the keypad sends SS3 sequences: each
+// key still types its character, and its Enter is Enter.
+func TestParseSS3Keypad(t *testing.T) {
+	for in, want := range map[string]rune{
+		"\x1bOo": '/', "\x1bOj": '*', "\x1bOm": '-', "\x1bOk": '+', "\x1bOn": '.',
+		"\x1bOp": '0', "\x1bOy": '9', "\x1bOX": '=', "\x1bOl": ',',
+	} {
+		ev, n := ParseEvent([]byte(in))
+		if n != len(in) || ev.Type != EventKey || ev.Key.Type != KeyRune || ev.Key.Ch != want {
+			t.Errorf("%q: %+v (consumed %d), want %q", in, ev.Key, n, want)
+		}
+	}
+	if ev, n := ParseEvent([]byte("\x1bOM")); n != 3 || ev.Key.Type != KeyEnter {
+		t.Errorf("keypad Enter: %+v (consumed %d)", ev.Key, n)
+	}
+}
+
 func TestParseSS3Keys(t *testing.T) {
 	cases := []struct {
 		name    string
@@ -443,7 +460,8 @@ func TestParsePartialAndMalformedSequences(t *testing.T) {
 	}
 
 	// Unknown SS3 sequence consumes the 3 bytes without emitting an event
-	ev, consumed = ParseEvent([]byte("\x1bOX"))
+	// (ESC O X is the keypad's =, so Z stands in for an unknown one).
+	ev, consumed = ParseEvent([]byte("\x1bOZ"))
 	if consumed != 3 || ev.Type != EventNone {
 		t.Errorf("unknown SS3: %+v consumed=%d", ev, consumed)
 	}
