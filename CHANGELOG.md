@@ -8,6 +8,8 @@ a patch bump (`v0.x.y`) does not.
 
 ## [Unreleased]
 
+## [v0.9.5] — 2026-10-01
+
 ### Added
 - README: a backdrop-shell section with a recording (`assets/backdrop-shell.gif`,
   1.2 MB, in the assets module, so no importer downloads it).
@@ -17,6 +19,12 @@ a patch bump (`v0.x.y`) does not.
   settings again when asked.
 
 ### Fixed
+- The keypad's `/ * - + . = ,` typed nothing with the kitty keyboard
+  protocol on: Alacritty, kitty and WezTerm send them as `KP_*` codes in
+  the Private Use Area, which the parser dropped with the lock and media
+  keys, keeping only the digits and Enter. They now type their character,
+  and so does the keypad in application keypad mode (`ESC O o` is its `/`,
+  `ESC O M` its Enter).
 - `backdrop-shell`: box drawing that a program repeated with REP (`CSI n
   b`, which kitty's, Alacritty's and xterm's terminfo all offer) came out
   as a row of the last ASCII letter: the emulator repeats only one-byte
@@ -502,7 +510,8 @@ a patch bump (`v0.x.y`) does not.
 ## v0.1.0 – v0.1.8
 See the [GitHub releases](https://github.com/thebanri/limoni/releases).
 
-[Unreleased]: https://github.com/thebanri/limoni/compare/v0.9.4...HEAD
+[Unreleased]: https://github.com/thebanri/limoni/compare/v0.9.5...HEAD
+[v0.9.5]: https://github.com/thebanri/limoni/compare/v0.9.4...v0.9.5
 [v0.9.4]: https://github.com/thebanri/limoni/compare/v0.9.3...v0.9.4
 [v0.9.3]: https://github.com/thebanri/limoni/compare/v0.9.2...v0.9.3
 [v0.9.2]: https://github.com/thebanri/limoni/compare/v0.9.1...v0.9.2
